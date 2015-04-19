@@ -1,0 +1,18 @@
+package com.example.player;
+
+import android.support.v7.app.ActionBarActivity;
+import android.os.Bundle;
+import android.view.Menu;
+import android.view.MenuItem;
+
+public class MainActivity extends ActionBarActivity {
+
+	private String url="http://vfx.mtime.cn/Video/2015/04/13/mp4/150413223643633591_480.mp4";
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_main);
+	}
+
+	
+}

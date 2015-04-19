@@ -1,0 +1,2139 @@
+package com.cloudfocus.opplayer;
+
+import io.vov.vitamio.MediaPlayer;
+import io.vov.vitamio.MediaPlayer.OnCompletionListener;
+import io.vov.vitamio.MediaPlayer.OnErrorListener;
+import io.vov.vitamio.MediaPlayer.OnPreparedListener;
+import io.vov.vitamio.widget.CenterLayout;
+import io.vov.vitamio.widget.MediaController;
+import io.vov.vitamio.widget.VideoView;
+
+import java.util.ArrayList;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.location.Location;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.support.v4.app.FragmentActivity;
+import android.text.SpannableString;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.View.OnTouchListener;
+import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.view.Window;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.AbsListView;
+import android.widget.AbsListView.OnScrollListener;
+import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ListView;
+import android.widget.RelativeLayout;
+import android.widget.TableLayout.LayoutParams;
+import android.widget.TextView;
+import android.widget.TextView.OnEditorActionListener;
+import android.widget.Toast;
+
+import com.appbase.AppSession;
+import com.appbase.JNIApi;
+import com.ccvideo.R;
+import com.cloudfocus.opplayer.daemon.AudioDecodeDaemon;
+import com.cloudfocus.opplayer.daemon.AudioEncodeDaemon;
+import com.cloudfocus.opplayer.daemon.LocalScanDeviceDaemon;
+import com.cloudfocus.opplayer.daemon.VideoDecodeDaemon;
+import com.cloudfocus.opplayer.daemon.VideoEncodeDaemon;
+import com.cloudfocus.opplayer.daemon.VideoPlayer;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+import com.cloudfocus.opplayer.misc.BaseType;
+import com.gitonway.lee.niftynotification.lib.Configuration;
+import com.gitonway.lee.niftynotification.lib.Effects;
+import com.media.RunnableImageView;
+import com.oupai.activity.CCVideoSquareActivity;
+import com.oupai.activity.LoginActivity;
+import com.oupai.activity.OtherPageActivity;
+import com.oupai.activity.OwnPageActivity;
+import com.oupai.dialog.CCVideoShareDialog;
+import com.oupai.entity.CCVideoShareVideoEntity;
+import com.oupai.entity.MessageEntity;
+import com.oupai.fragment.ActionSheet;
+import com.oupai.fragment.ActionSheet.ActionSheetListener;
+import com.oupai.http.HTTPGetChattingMessageWithWatchingHeartBTDaemon;
+import com.oupai.http.HTTPSetUserLikeLivingDaemon;
+import com.oupai.http.HTTPUploadVoiceRequestDaemon;
+import com.oupai.http.HTTPUserRelationActionDaemon;
+import com.oupai.http.HTTPUserWatchingLivingRequestDaemon;
+import com.oupai.misc.Constants;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.oupai.view.chatface.FaceConversionUtil;
+import com.oupai.view.chatface.FaceRelativeLayout;
+
+public class OPPlayerActivity extends FragmentActivity implements
+		SurfaceHolder.Callback, View.OnClickListener, ActionSheetListener {
+
+	private static final int kActivityResultForLike = 1;
+
+	public static final int HTTP_APPDEVPLAYLIVE_OKK = 0x111;
+	public static final int HTTP_APPDEVPLAYLIVE_ERR = 0x112;
+
+	public static final int HTTP_APPDEVSTOPLIVE_OKK = 0x121;
+	public static final int HTTP_APPDEVSTOPLIVE_ERR = 0x122;
+
+	public static final int LOCAL_SCANDEV_OKK = 0x113;
+	public static final int LOCAL_SCANDEV_ERR = 0x114;
+
+	public static final int DATAGATED_VOICE_OKK = 0x115;
+	public static final int DATAGATED_VOICE_ERR = 0x116;
+
+	public static final int HTTP_FETCH_MESSAGE_OKK = 0x311;
+	public static final int HTTP_FETCH_MESSAGE_ERR = 0x312;
+
+	public static final int HTTP_SUBMIT_MESSAGE_OKK = 0x313;
+	public static final int HTTP_SUBMIT_MESSAGE_ERR = 0x314;
+
+	public static final int HTTP_WATCHING_HEARTBT_OKK = 0x411;
+	public static final int HTTP_WATCHING_HEARTBT_ERR = 0x412;
+
+	public static final int HTTP_FETCHMSG_AND_WATCHINGHT_OKK = 0x711;
+	public static final int HTTP_FETCHMSG_AND_WATCHINGHT_ERR = 0x712;
+
+	public static final int HTTP_FETCHMSG_AND_LIVINGHT_OKK = 0x811;
+	public static final int HTTP_FETCHMSG_AND_LIVINGHT_ERR = 0x812;
+
+	public static final int HTTP_LOADING_IMAGE_DONE = 0x612;
+
+	public static final int UPDATE_LIVING_TIME = 0x1012;
+
+	private OPPlayerActivity mainActivity = null;
+
+	private SurfaceView surfaceView = null;
+	private SurfaceHolder surfaceHolder = null;
+
+	private int currentIndex = 0;
+	// private LinearLayout msgLayout = null;
+	private LayoutInflater layoutInflater = null;
+	// private WebView msgWebView = null;
+
+	private AudioDecodeDaemon audioDecodeDaemon = null;
+	private AudioEncodeDaemon audioEncodeDaemon = null;
+	private VideoDecodeDaemon videoDecodeDaemon = null;
+	private VideoEncodeDaemon videoEncodeDaemon = null;
+
+	private VideoPlayer videoPlayer = null;
+
+	private boolean isLivePage = true;
+
+	private Handler audioDecodeHandler = null;
+	private Handler audioEncodeHandler = null;
+	private Handler videoDecodeHandler = null;
+	private Handler videoEncodeHandler = null;
+
+	private HTTPUserWatchingLivingRequestDaemon userWatchingLivingRequest = null;
+	private HTTPUploadVoiceRequestDaemon playVoiceRequest = null;
+
+	// private HTTPUserWatchingHeartbtDaemon playingHeartbt = null;
+	private Handler httpHandler = null;
+
+	// private HTTPGetChattingMessageDaemon fetchMessageDaemon = null;
+	private HTTPGetChattingMessageWithWatchingHeartBTDaemon chattingMessageWithHeartBT = null;
+	// private HTTPSubmitChattingMessageDaemon submitMessageDaemon = null;
+
+	private LocalScanDeviceDaemon localScanDevice = null;
+
+	private Timer mUpdateLivingTimeTimer = null;
+	private int livingTime = 0;
+	private boolean isLiving = false;
+	// private VideoView videoPlayerView = null;
+
+	private String linkID = null;
+	private String userName = null;
+	private String ownName = null;
+	private String displayName = null;
+	private String sessionID = null;
+
+	private static final int BIGGER = 1;
+	private static final int SMALLER = 2;
+	private InputMethodManager mImm;
+	private EditText mInputEdit;
+	private Button mSend;
+	private LinearLayout mBtLayout;
+	private LinearLayout like_bt;
+	private ImageView like_bt_img;
+	private LinearLayout share_bt;
+	private LinearLayout more_bt;
+
+	private TextView follow_btn;
+
+	private ImageView isLiveIcon;
+	private TextView livePrompt;
+	private LinearLayout liveStatusLayout;
+
+	private CCVideoShareDialog mShareDialog;
+
+	private String mVideoTitle = null;
+
+	private boolean mStreamCanPlay = true;
+
+	// Video Player
+	private VideoView mVideoView;
+	private MediaController mMediaController;
+	private CenterLayout mCenterLayout;
+
+	private Boolean bAllowChangeOrientation = true;
+	private Boolean bIsFullScreen = false;
+	private String mInputFilePlayURL = null;
+
+	private ImageView btn_face;
+	private ListView mListView;
+	private ListAdapter mListAdapter;
+	private FaceRelativeLayout mFaceRelativeLayout;
+
+	private RelativeLayout mNavigationBar = null;
+	private int mNavigationHeight = 0;
+	private int mLiveStatus = Constants.kVideoStatusLive;
+	private boolean mStopNotificationShown = false;
+
+	private boolean mCurrentVideoLiked = false;
+
+	// class InputHandler extends Handler {
+	// @Override
+	// public void handleMessage(Message msg) {
+	//
+	// if (msg.arg1 == BIGGER) {
+	// if(mBtLayout != null)
+	// mBtLayout.setVisibility(View.VISIBLE);
+	// if(mSend != null)
+	// mSend.setVisibility(View.GONE);
+	// btn_face.setVisibility(View.GONE);
+	// } else {
+	// if(mBtLayout != null)
+	// mBtLayout.setVisibility(View.GONE);
+	// if(mSend != null)
+	// mSend.setVisibility(View.VISIBLE);
+	// btn_face.setVisibility(View.VISIBLE);
+	// }
+	//
+	// super.handleMessage(msg);
+	// }
+	// }
+	//
+	// private InputHandler mHandler = new InputHandler();
+
+	private int touchType = 0;
+	public static final int SURFACEVIEW_DRAG_FEATURE = 0x01;
+	public static final int SURFACEVIEW_ZOOM_FEATURE = 0x01;
+
+	private static final String TAG = "OPPlayerActivity";
+
+	private boolean fromPush = false;
+
+	private OnClickListener mUserLogoClickListener = new OnClickListener() {
+		@Override
+		public void onClick(View view) {
+			Intent intent = null;
+			Bundle b = new Bundle();
+			b.putString("uname", chattingMessageWithHeartBT.uname);
+			b.putString("userDName", chattingMessageWithHeartBT.display_name);
+			b.putString("sessionID",
+					Utils.getInstance().getSessionID(mainActivity));
+
+			if (userName == null) {
+				// b.putBoolean("showcurrentuser", false);
+				intent = new Intent(mainActivity, OtherPageActivity.class);
+				b.putInt("followFlag", chattingMessageWithHeartBT.followed_flag);
+			} else if (userName.equals(chattingMessageWithHeartBT.uname)) {
+				intent = new Intent(mainActivity, OwnPageActivity.class);
+				b.putBoolean("showcurrentuser", true);
+			} else {
+				// b.putBoolean("showcurrentuser", false);
+				intent = new Intent(mainActivity, OtherPageActivity.class);
+				b.putInt("followFlag", chattingMessageWithHeartBT.followed_flag);
+			}
+			intent.putExtras(b);
+			mainActivity.startActivity(intent);
+		}
+	};
+
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		Log.e(TAG,
+				Utils.getFileName(new Exception()) + " : "
+						+ Utils.getLineNumber(new Exception()));
+		if (Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		Log.e(TAG,
+				Utils.getFileName(new Exception()) + " : "
+						+ Utils.getLineNumber(new Exception()));
+		requestWindowFeature(Window.FEATURE_NO_TITLE);
+		// getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+		// WindowManager.LayoutParams.FLAG_FULLSCREEN);
+		// getWindow().setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+		// WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+		Log.e(TAG,
+				Utils.getFileName(new Exception()) + " : "
+						+ Utils.getLineNumber(new Exception()));
+		this.mainActivity = this;
+		Log.e(TAG,
+				Utils.getFileName(new Exception()) + " : "
+						+ Utils.getLineNumber(new Exception()));
+		try {
+			Intent intent = getIntent();
+			Bundle b = intent.getExtras();
+			if (b != null) {
+				this.linkID = b.getString("linkid");
+				this.ownName = b.getString("oname");
+				this.mVideoTitle = b.getString("video_title");
+				this.displayName = b.getString("user_dname");
+				this.fromPush = b.getBoolean("fromPush", false);
+				Log.e(TAG,
+						Utils.getFileName(new Exception()) + " : "
+								+ Utils.getLineNumber(new Exception()) + " : "
+								+ this.fromPush);
+			} else if (Intent.ACTION_VIEW.equals(intent.getAction())) {
+				Uri uri = intent.getData();
+				if (uri != null) {
+					linkID = uri.getQueryParameter("linkid");
+					ownName = uri.getQueryParameter("oname");
+				}
+			}
+
+			userName = Utils.getInstance().getUsername(mainActivity);
+			if (userName == null) {
+				userName = "guest";
+			}
+
+			sessionID = Utils.getInstance().getSessionID(mainActivity);
+
+			setContentView(R.layout.opplayer_activity);
+
+			this.initView();
+			this.initActivityEvents();
+
+			setTheme(R.style.ActionSheetStyleIOS7);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void initView() {
+		mVideoView = (VideoView) findViewById(R.id.surface_view);
+		mCenterLayout = (CenterLayout) findViewById(R.id.centerLayout);
+		mMediaController = new MediaController(this,true,mVideoView);
+		mImm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+
+		// ResizeLayout layout = (ResizeLayout) findViewById(R.id.root_layout);
+		// layout.setOnResizeListener(new ResizeLayout.OnResizeListener() {
+		//
+		// public void OnResize(int w, int h, int oldw, int oldh) {
+		// int change = BIGGER;
+		// if (h < oldh) {
+		// change = SMALLER;
+		// }
+		//
+		// Message msg = new Message();
+		// msg.arg1 = change;
+		// mHandler.sendMessage(msg);
+		// }
+		// });
+
+		mNavigationBar = (RelativeLayout) findViewById(R.id.navigation_bar_id);
+		ViewTreeObserver vto = mNavigationBar.getViewTreeObserver();
+		vto.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+			public boolean onPreDraw() {
+				mNavigationBar.getViewTreeObserver().removeOnPreDrawListener(
+						this);
+				mNavigationHeight = mNavigationBar.getMeasuredHeight();
+				return true;
+			}
+		});
+
+		mFaceRelativeLayout = (FaceRelativeLayout) findViewById(R.id.FaceRelativeLayout);
+
+		mInputEdit = (EditText) findViewById(R.id.et_sendmessage);
+		mInputEdit.setOnClickListener(this);
+		mInputEdit.setOnEditorActionListener(new OnEditorActionListener() {
+			@Override
+			public boolean onEditorAction(TextView v, int actionId,
+					android.view.KeyEvent event) {
+				mInputEdit.getEditableText().clear();
+				mImm.hideSoftInputFromWindow(mInputEdit.getWindowToken(), 0);
+				mBtLayout.setVisibility(View.VISIBLE);
+				mSend.setVisibility(View.GONE);
+				return false;
+			}
+		});
+		mInputEdit.setOnTouchListener(new OnTouchListener() {
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				if (event.getAction() == MotionEvent.ACTION_UP) {
+					// TODO Auto-generated method stub
+					mFaceRelativeLayout.hideFaceLayout();
+					mFaceRelativeLayout.showKeyboard(OPPlayerActivity.this);
+					if (mBtLayout != null)
+						mBtLayout.setVisibility(View.GONE);
+					if (mSend != null)
+						mSend.setVisibility(View.VISIBLE);
+					btn_face.setVisibility(View.VISIBLE);
+					mInputEdit.requestFocus();
+				}
+				return true;
+			}
+		});
+
+		mBtLayout = (LinearLayout) findViewById(R.id.bt_layout);
+		mBtLayout.setOnClickListener(this);
+		like_bt = (LinearLayout) findViewById(R.id.like_bt);
+		like_bt.setOnClickListener(this);
+		like_bt_img = (ImageView) findViewById(R.id.icon_like_img_id);
+		share_bt = (LinearLayout) findViewById(R.id.share_bt);
+		share_bt.setOnClickListener(this);
+		more_bt = (LinearLayout) findViewById(R.id.more_bt);
+		more_bt.setOnClickListener(this);
+		btn_face = (ImageView) findViewById(R.id.btn_face);
+
+		isLiveIcon = (ImageView) findViewById(R.id.living_icon);
+		livePrompt = (TextView) findViewById(R.id.living_prompt_id);
+		liveStatusLayout = (LinearLayout) findViewById(R.id.live_status_id);
+
+		follow_btn = (TextView) findViewById(R.id.follow_status_id);
+		follow_btn.setOnClickListener(this);
+	}
+
+	private void initActivityEvents() {
+		httpHandler = new Handler() {
+			public void handleMessage(Message msg) {
+				try {
+					switch (msg.what) {
+					case OPPlayerActivity.HTTP_APPDEVPLAYLIVE_OKK:
+						if ("amqp"
+								.equalsIgnoreCase(userWatchingLivingRequest.protocol)) {
+							isLivePage = true;
+							startRemoteInputStream();
+						} else if ("http"
+								.equalsIgnoreCase(userWatchingLivingRequest.protocol)) {
+							isLivePage = false;
+							startRemoteInputFile();
+						}
+						break;
+					case OPPlayerActivity.HTTP_APPDEVPLAYLIVE_ERR:
+						Toast.makeText(mainActivity, R.string.error_net_str,
+								Toast.LENGTH_SHORT).show();
+						break;
+					case OPPlayerActivity.LOCAL_SCANDEV_OKK:
+						startLocalInputStream();
+						break;
+					case OPPlayerActivity.LOCAL_SCANDEV_ERR:
+						Toast.makeText(mainActivity, R.string.error_net_str,
+								Toast.LENGTH_SHORT).show();
+						break;
+					case OPPlayerActivity.DATAGATED_VOICE_OKK:
+						startRemoteOutputStream();
+						break;
+					case OPPlayerActivity.DATAGATED_VOICE_ERR:
+						break;
+					case OPPlayerActivity.HTTP_FETCH_MESSAGE_OKK:
+						displayMessageList();
+						break;
+					case OPPlayerActivity.HTTP_FETCH_MESSAGE_ERR:
+						Toast.makeText(mainActivity, R.string.error_net_str,
+								Toast.LENGTH_SHORT).show();
+						break;
+					case OPPlayerActivity.HTTP_FETCHMSG_AND_WATCHINGHT_OKK:
+						displayMessageList();
+						break;
+					case OPPlayerActivity.HTTP_FETCHMSG_AND_WATCHINGHT_ERR:
+						Toast.makeText(mainActivity, R.string.error_net_str,
+								Toast.LENGTH_SHORT).show();
+						break;
+					case OPPlayerActivity.UPDATE_LIVING_TIME:
+						updateLivingTime();
+						break;
+					case OPPlayerActivity.HTTP_SUBMIT_MESSAGE_OKK:
+						EditText et = (EditText) mainActivity
+								.findViewById(R.id.msg_input_id);
+						et.setText("");
+						// chattingMessageWithHeartBT.notifyDaemon();
+						break;
+					case OPPlayerActivity.HTTP_SUBMIT_MESSAGE_ERR:
+						Toast.makeText(mainActivity, R.string.error_net_str,
+								Toast.LENGTH_SHORT).show();
+						break;
+					case OPPlayerActivity.HTTP_WATCHING_HEARTBT_OKK:
+						break;
+					case OPPlayerActivity.HTTP_WATCHING_HEARTBT_ERR:
+						Toast.makeText(mainActivity,
+								R.string.error_offline_str, Toast.LENGTH_SHORT)
+								.show();
+						// audioDecodeDaemon.closeAudioTrack();
+						break;
+					case OPPlayerActivity.HTTP_LOADING_IMAGE_DONE:
+						RunnableImageView rv = (RunnableImageView) msg.obj;
+						rv.setImageView();
+						msg.obj = null;
+						break;
+					default:
+						Toast.makeText(mainActivity, R.string.error_again_str,
+								Toast.LENGTH_SHORT).show();
+						// displayCloseView();
+						break;
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		};
+
+		LocationManager manager = (LocationManager) this
+				.getSystemService(Context.LOCATION_SERVICE);
+		String gps_x = null;
+		String gps_y = null;
+		if (manager != null) {
+			Location location = manager.getLastKnownLocation(Utils
+					.getInstance().getLastLocationProvider(this));
+			if (location != null) {
+				gps_x = "" + location.getLatitude();
+				gps_y = "" + location.getLongitude();
+			}
+		}
+		userWatchingLivingRequest = new HTTPUserWatchingLivingRequestDaemon(
+				httpHandler, HTTP_APPDEVPLAYLIVE_OKK, HTTP_APPDEVPLAYLIVE_ERR,
+				gps_x, gps_y);
+		playVoiceRequest = new HTTPUploadVoiceRequestDaemon(httpHandler);
+		localScanDevice = new LocalScanDeviceDaemon(httpHandler);
+
+		View home = this.findViewById(R.id.opplayer_return_btn_id);
+		home.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				quitPlayerPage();
+			}
+		});
+
+		videoDecodeHandler = new Handler() {
+			public void handleMessage(Message msg) {
+
+				// LinearLayout layout =
+				// (LinearLayout)findViewById(R.id.half_player_id);
+				// ProgressBar progress = (ProgressBar)
+				// findViewById(R.id.half_player_progressbar_id);
+
+				try {
+					// AppSysTool.LogDebug("Receive Message "+msg.what);
+					switch (msg.what) {
+					case VideoDecodeDaemon.VIDEO_DECODE_PLAYING:
+						isLiving = true;
+						hiddenProgressBar();
+						videoPlayer.setRawVideoAttr(
+								videoDecodeDaemon.getVideoWidth(),
+								videoDecodeDaemon.getVideoHeight());
+
+						break;
+					case VideoDecodeDaemon.VIDEO_DECODE_BROKEN:
+						// prepareVideo();
+						Log.d("Opplayer", "Video decoding broken");
+						break;
+					case VideoDecodeDaemon.VIDEO_DECODE_CLOSE:
+						// releaseVideo();
+						break;
+					case VideoDecodeDaemon.VIDEO_DECODE_DATA:
+						try {
+							if (videoDecodeDaemon != null) {
+								byte[] data = videoDecodeDaemon.getRGBData();
+								videoPlayer.displayVideoOnSurfaceView(data);
+							}
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+						break;
+
+					case AppSession.APPGATE_ENET:
+						Toast.makeText(mainActivity, R.string.error_net_str,
+								Toast.LENGTH_SHORT).show();
+						// displayCloseView();
+						break;
+					case AppSession.APPGATE_EOK:
+						Toast.makeText(mainActivity, R.string.error_ok_str,
+								Toast.LENGTH_SHORT).show();
+						// displayPlayView();
+						displayCameraPlayer();
+						break;
+					case AppSession.APPGATE_EPERM:
+						Toast.makeText(mainActivity, R.string.error_perm_str,
+								Toast.LENGTH_SHORT).show();
+						// displayCloseView();
+						break;
+					case AppSession.APPGATE_EOFFLINE:
+						Toast.makeText(mainActivity,
+								R.string.error_offline_str, Toast.LENGTH_SHORT)
+								.show();
+						// displayCloseView();
+						break;
+					case AppSession.APPGATE_EAGAIN:
+						Toast.makeText(mainActivity, R.string.error_again_str,
+								Toast.LENGTH_SHORT).show();
+						// displayCloseView();
+						break;
+					default:
+						Toast.makeText(mainActivity, R.string.error_again_str,
+								Toast.LENGTH_SHORT).show();
+						// displayCloseView();
+						break;
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		};
+		videoDecodeDaemon = new VideoDecodeDaemon(videoDecodeHandler);
+		audioDecodeDaemon = new AudioDecodeDaemon();
+		audioDecodeHandler = new Handler() {
+			public void handleMessage(Message msg) {
+				try {
+					switch (msg.what) {
+					default:
+						Toast.makeText(mainActivity, "msg " + msg.what,
+								Toast.LENGTH_SHORT).show();
+						break;
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		};
+
+		/* Message */
+		mListView = (ListView) findViewById(R.id.listview);
+		// msgLayout = (LinearLayout)
+		// this.findViewById(R.id.opplayer_msg_panel_id);
+		layoutInflater = LayoutInflater.from(this.mainActivity);
+
+		// msgWebView = (WebView) findViewById(R.id.web_message_view_id);
+		// WebSettings webSettings = msgWebView.getSettings();
+		// webSettings.setJavaScriptEnabled(true);
+
+		/*
+		 * View voice = this.findViewById(R.id.voice_button_id);
+		 * voice.setOnClickListener(new View.OnClickListener() {
+		 * 
+		 * @Override public void onClick(View arg0) { // TODO Auto-generated
+		 * method stub //if (devID != null) {
+		 * AppSysTool.LogDebug("device play voice clicked");
+		 * 
+		 * playVoiceRequest.setHTTPRequest(devID, DATAGATED_VOICE_OKK,
+		 * DATAGATED_VOICE_ERR); new Thread(playVoiceRequest).start(); //} } });
+		 */
+		this.audioEncodeDaemon = new AudioEncodeDaemon();
+
+		/* Message Daemon */
+		// this.fetchMessageDaemon = new
+		// HTTPGetChattingMessageDaemon(this.httpHandler,
+		// OPPlayerActivity.HTTP_FETCH_MESSAGE_OKK,
+		// OPPlayerActivity.HTTP_FETCH_MESSAGE_OKK);
+		audioEncodeDaemon = new AudioEncodeDaemon();
+		chattingMessageWithHeartBT = new HTTPGetChattingMessageWithWatchingHeartBTDaemon(
+				this.httpHandler,
+				OPPlayerActivity.HTTP_FETCHMSG_AND_WATCHINGHT_OKK,
+				OPPlayerActivity.HTTP_FETCHMSG_AND_WATCHINGHT_ERR);
+		AppSysTool.LogDebug("chattingMessageWithHeartBT "
+				+ chattingMessageWithHeartBT + "userWatchingLivingRequest "
+				+ userWatchingLivingRequest);
+
+		// this.submitMessageDaemon = new
+		// HTTPSubmitChattingMessageDaemon(this.httpHandler,
+		// OPPlayerActivity.HTTP_SUBMIT_MESSAGE_OKK,
+		// OPPlayerActivity.HTTP_SUBMIT_MESSAGE_ERR);
+
+		mSend = (Button) this.findViewById(R.id.btn_send);
+		mSend.setOnClickListener(new View.OnClickListener() {
+
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				EditText et = (EditText) mainActivity
+						.findViewById(R.id.et_sendmessage);
+				String msg = et.getText().toString().trim();
+				et.setSelection(msg.length());
+				if (msg.length() < 1) {
+					Toast.makeText(mainActivity,
+							R.string.error_desc_min_length_str,
+							Toast.LENGTH_SHORT).show();
+					return;
+				}
+				if (msg.length() > 128) {
+					Toast.makeText(mainActivity,
+							R.string.error_desc_max_length_str,
+							Toast.LENGTH_SHORT).show();
+					return;
+				}
+				// submitMessageDaemon.startHttpRequest(linkID,
+				// Utils.getInstance().getSessionID(mainActivity), msg);
+
+				if (chattingMessageWithHeartBT.submitMessage(msg)) {
+					et.setText("");
+				} else {
+					Toast.makeText(mainActivity,
+							R.string.warning_sumbit_message_fast_str,
+							Toast.LENGTH_SHORT).show();
+				}
+
+				mInputEdit.getEditableText().clear();
+				mImm.hideSoftInputFromWindow(mInputEdit.getWindowToken(), 0);
+
+				if (mBtLayout != null)
+					mBtLayout.setVisibility(View.VISIBLE);
+				if (mSend != null)
+					mSend.setVisibility(View.GONE);
+				btn_face.setVisibility(View.GONE);
+				mFaceRelativeLayout.hideFaceLayout();
+
+				// new Thread(submitMessageDaemon).start();
+			}
+		});
+
+		// {
+		// this.fetchMessageDaemon.startHttpRequest(linkID);
+		// }
+
+		this.surfaceView = (SurfaceView) this
+				.findViewById(R.id.liveplayer_surfaceview_id);
+		this.videoDecodeDaemon.setSurfaceHolder(this.surfaceHolder);
+
+		this.surfaceView.setOnTouchListener(new View.OnTouchListener() {
+			private float oldDistance = 0.0f;
+			private float newDistance = 0.0f;
+
+			private float downX = (float) 0.0;
+			private float downY = (float) 0.0;
+			private float upX = (float) 0.0;
+			private float upY = (float) 0.0;
+
+			private float fdownX = (float) 0.0;
+			private float fdownY = (float) 0.0;
+			private float fupX = (float) 0.0;
+			private float fupY = (float) 0.0;
+
+			@Override
+			public boolean onTouch(View v, MotionEvent event) {
+				// TODO Auto-generated method stub
+				switch (event.getAction() & MotionEvent.ACTION_MASK) {
+				case MotionEvent.ACTION_DOWN:
+					this.downX = event.getX(0);
+					this.downY = event.getY(0);
+
+					touchType = SURFACEVIEW_DRAG_FEATURE;
+
+					// AppSysTool.LogDebug("ACTION_DOWN: "+event.getX()+" "+event.getY());
+					break;
+				case MotionEvent.ACTION_POINTER_DOWN:
+					this.oldDistance = this.getPointerDistance(event);
+
+					touchType = SURFACEVIEW_ZOOM_FEATURE;
+					// AppSysTool.LogDebug("ACTION_POINTER_DOWN: "+event.getX(1)+" "+event.getY(1)+" "+this.newDistance);
+					break;
+				case MotionEvent.ACTION_UP:
+					this.upX = event.getX(0);
+					this.upY = event.getY(0);
+
+					// AppSysTool.LogDebug("ACTION_UP: "+event.getX()+" "+event.getY());
+					if (touchType == SURFACEVIEW_DRAG_FEATURE) {
+						moveCamera(this.downX, this.downY, this.upX, this.upY);
+					} else if (touchType == SURFACEVIEW_ZOOM_FEATURE) {
+
+						// this.newDistance = this.getPointerDistance(event);
+
+						touchType = SURFACEVIEW_ZOOM_FEATURE;
+						// AppSysTool.LogDebug("ACTION_UP: "+this.newDistance);
+
+						scaleCamera(this.oldDistance, this.newDistance);
+					}
+
+					touchType = 0;
+					// AppSysTool.LogDebug("ACTION_UP: "+event.getX()+" "+event.getY());
+
+					break;
+				case MotionEvent.ACTION_POINTER_UP:
+					this.fupX = event.getX(1);
+					this.fupY = event.getY(1);
+
+					this.newDistance = this.getPointerDistance(event);
+					// moveCamera(this.downX, this.downY, event.getX(),
+					// event.getY());
+					break;
+				}
+
+				return true;
+			}
+
+			private float getPointerDistance(MotionEvent event) {
+				float dx = event.getX(0) - event.getX(1);
+				float dy = event.getY(0) - event.getY(1);
+				float dis = (float) Math.sqrt(dx * dx + dy * dy);
+
+				return dis;
+			}
+
+			public void scaleCamera(float odis, float ndis) {
+				// TODO Auto-generated method stub
+				float scale2 = ndis / odis;
+
+				if (scale2 > 1.2) {
+					// ccvideoDecoder.setZoomIn();
+				} else if (scale2 < 0.8) {
+					// ccvideoDecoder.setZoomOut();
+				}
+
+				// TextView tv = (TextView)
+				// mainActivity.findViewById(R.id.liveplayer_zoomval_id);
+				// tv.setText("X"+ccvideoDecoder.getZoomSize());
+			}
+
+			public boolean moveCamera(float oldX, float oldY, float newX,
+					float newY) {
+				// TODO Auto-generated method stub
+				float dx = newX > oldX ? newX - oldX : oldX - newX;
+				float dy = newY > oldY ? newY - oldY : oldY - newY;
+				boolean rval = false;
+
+				if (dx > dy && dx > 64.0) {
+					// Left or right
+					if (newX < oldX) {
+						// Log.e("FP", "Right");
+						// rval = movePTZ.moveCameraPTZ(devID,
+						// AppSessionMovePTZ.APPSESSION_MOVEPTZ_RIGHT, 10);
+
+						// AppSession.cameraMoveRight(devID, (short)15);
+					} else {
+						// Log.e("FP", "Left");
+						// rval = movePTZ.moveCameraPTZ(devID,
+						// AppSessionMovePTZ.APPSESSION_MOVEPTZ_LEFT, 10);
+
+						// AppSession.cameraMoveLeft(devID,(short)15);
+					}
+
+				} else if (dy > 64.0) {
+					// up or down
+					if (newY < oldY) {
+						// Log.e("FP", "Down");
+						// rval = movePTZ.moveCameraPTZ(devID,
+						// AppSessionMovePTZ.APPSESSION_MOVEPTZ_DOWN, 10);
+
+						// AppSession.cameraMoveDown(devID, (short)15);
+					} else {
+						// Log.e("FP", "UP");
+						// rval = movePTZ.moveCameraPTZ(devID,
+						// AppSessionMovePTZ.APPSESSION_MOVEPTZ_UP, 10);
+
+						// AppSession.cameraMoveUp(devID, (short)15);
+					}
+				} else if (dx < 64.0 && dy < 64.0) {
+					rval = true;
+					displayLivePlayerTitle();
+				}
+
+				if (rval == false) {
+					// ErrorToast.messageShortShow(mainActivity,
+					// AppSession.APPGATE_EBUSY);
+				}
+
+				return true;
+			}
+		});
+
+		View pv = mainActivity.findViewById(R.id.opplayer_play_button_id);
+		pv.setVisibility(View.INVISIBLE);
+		// pv = mainActivity.findViewById(R.id.opplayer_time_line_id);
+		// pv.setVisibility(View.INVISIBLE);
+		// pv = mainActivity.findViewById(R.id.opplayer_total_time_id);
+		// pv.setVisibility(View.INVISIBLE);
+
+		this.surfaceHolder = surfaceView.getHolder();
+		surfaceHolder.addCallback(this);
+	}
+
+	private void quitPlayerPage() {
+		exitPlayerPage();
+		stopAllDaemons();
+		mainActivity.finish();
+		if (fromPush == true) {
+			Intent intent = new Intent();
+			intent.setClass(OPPlayerActivity.this, CCVideoSquareActivity.class);
+			intent.addFlags(Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT);
+			startActivity(intent);
+		}
+	}
+
+	private void initUpdateLivingTimeTimer() {
+		mUpdateLivingTimeTimer = new Timer(true);
+		mUpdateLivingTimeTimer.schedule(new TimerTask() {
+			public void run() {
+				Message msg = new Message();
+				msg.what = UPDATE_LIVING_TIME;
+				httpHandler.sendMessage(msg);
+			}
+		}, 1000, 1000);
+	}
+
+	private void startCommentDaemon() {
+		chattingMessageWithHeartBT = new HTTPGetChattingMessageWithWatchingHeartBTDaemon(
+				this.httpHandler,
+				OPPlayerActivity.HTTP_FETCHMSG_AND_WATCHINGHT_OKK,
+				OPPlayerActivity.HTTP_FETCHMSG_AND_WATCHINGHT_ERR);
+		AppSysTool.LogDebug("chattingMessageWithHeartBT "
+				+ chattingMessageWithHeartBT + "userWatchingLivingRequest "
+				+ userWatchingLivingRequest);
+	}
+
+	private void stopCommentDaemon() {
+		if (this.chattingMessageWithHeartBT != null) {
+			this.chattingMessageWithHeartBT.stopRunning();
+
+			chattingMessageWithHeartBT = null;
+		}
+	}
+
+	private void updateLivingTime() {
+		TextView time = (TextView) this.findViewById(R.id.opplayer_time_id);
+
+		// if (videoPlayerView != null) {
+		// time.setText(BaseType.sec2strtime(this.videoPlayerView.getCurrentPosition()/1000));
+		// return;
+		// }
+		//
+		if (isLiving == false) {
+			return;
+		}
+
+		livingTime++;
+		time.setText(BaseType.sec2strtime(this.livingTime));
+	}
+
+	private void displayMessageList() {
+		// String listresult = this.fetchMessageDaemon.getReqResult();
+
+		// AppSysTool.LogDebug("Fetch Message: "+listresult);
+
+		if (chattingMessageWithHeartBT == null
+				|| !chattingMessageWithHeartBT.isRunning()) {
+			return;
+		}
+
+		mListAdapter = new ListAdapter(this);
+		mListView.setAdapter(mListAdapter);
+		mListView.setOnScrollListener(new OnScrollListener() {
+
+			@Override
+			public void onScrollStateChanged(AbsListView view, int scrollState) {
+				// TODO Auto-generated method stub
+				// 当不滚动时
+				if (scrollState == OnScrollListener.SCROLL_STATE_IDLE) {
+					// 判断是否滚动到底部
+					if (view.getLastVisiblePosition() == view.getCount() - 1) {
+						mListAdapter.notifyDataSetChanged();
+						mListView.setSelection(currentIndex - 1);
+					}
+				}
+			}
+
+			@Override
+			public void onScroll(AbsListView view, int firstVisibleItem,
+					int visibleItemCount, int totalItemCount) {
+				// TODO Auto-generated method stub
+				currentIndex = firstVisibleItem + visibleItemCount;
+			}
+		});
+		// mListView.setSelection(2);
+
+		// TextView user_name = (TextView)
+		// mainActivity.findViewById(R.id.opplayer_user_name_id);
+		// user_name.setText(""+chattingMessageWithHeartBT.display_name);
+		//
+		TextView comment_count = (TextView) mainActivity
+				.findViewById(R.id.comment_count_id);
+		comment_count.setText(getString(R.string.comment_str)
+				+ chattingMessageWithHeartBT.video_comment_count
+				+ getString(R.string.quantity));
+
+		TextView like = (TextView) this
+				.findViewById(R.id.opplayer_like_count_id);
+		// String countFormat =
+		// getResources().getString(R.string.like_count_str);
+		// String countText = String.format(countFormat,
+		// String.valueOf(chattingMessageWithHeartBT.video_like_count));
+		like.setText("" + chattingMessageWithHeartBT.video_like_count);
+
+		// TextView watching_count = (TextView)
+		// mainActivity.findViewById(R.id.opplayer_watching_count_id);
+		// watching_count.setText(""+chattingMessageWithHeartBT.video_watching_count);
+		//
+		TextView watch_count = (TextView) mainActivity
+				.findViewById(R.id.opplayer_watch_count_id);
+		watch_count.setText("" + chattingMessageWithHeartBT.video_watch_count);
+
+		TextView watching_count_head = (TextView) mainActivity
+				.findViewById(R.id.watching_count_id);
+		watching_count_head.setText(""
+				+ chattingMessageWithHeartBT.video_watching_count);
+		//
+		// TextView watch_people_count =
+		// (TextView)mainActivity.findViewById(R.id.watch_people_textview_id);
+		// watch_people_count.setText(getResources().getString(R.string.watch_people_str)
+		// +
+		// chattingMessageWithHeartBT.video_watch_count+getResources().getString(R.string.people_str));
+		//
+		TextView living_title = (TextView) mainActivity
+				.findViewById(R.id.opplayer_living_title_id);
+		living_title.setText("" + chattingMessageWithHeartBT.video_title);
+		mVideoTitle = chattingMessageWithHeartBT.video_title;
+
+		// TextView follow = (TextView)
+		// this.findViewById(R.id.follow_status_id);
+		// if (userWatchingLivingRequest.followed_flag == 1) {
+		// follow.setText(R.string.unfollow_action_str);//
+		// .setVisibility(View.INVISIBLE);
+		// follow.setVisibility(View.VISIBLE);
+		// } else {
+		// follow.setText(R.string.follow_action_str);
+		// follow.setVisibility(View.VISIBLE);
+		// }
+		//
+
+		if (isLiving) {
+			if (chattingMessageWithHeartBT.living == 0) {
+				mLiveStatus = Constants.kVideoStatusStopped;
+
+				// Toast.makeText(mainActivity, R.string.error_offline_str,
+				// Toast.LENGTH_SHORT).show();
+				if (mStopNotificationShown == false) {
+					showNotification(Constants.kVideoStatusStopped,
+							Integer.MAX_VALUE);
+					mStopNotificationShown = true;
+				}
+
+				if (mUpdateLivingTimeTimer != null) {
+					mUpdateLivingTimeTimer.cancel();
+					mUpdateLivingTimeTimer = null;
+				}
+				/* Stop Audio Decode Daemon when living is offline */
+				if (this.audioDecodeDaemon != null) {
+					this.audioDecodeDaemon.stopDaemon();
+				}
+
+				if (this.videoDecodeDaemon != null) {
+					this.videoDecodeDaemon.stopDaemon();
+				}
+			} else if (chattingMessageWithHeartBT.device_status != 0
+					&& mLiveStatus == Constants.kVideoStatusLive) {
+				if (mLiveStatus == Constants.kVideoStatusLive) {
+					if (chattingMessageWithHeartBT.device_status == 1) {
+						showNotification(Constants.kVideoStatusBackground,
+								Integer.MAX_VALUE);
+						mLiveStatus = Constants.kVideoStatusBackground;
+					} else if (chattingMessageWithHeartBT.device_status == 2) {
+						showNotification(Constants.kVideoStatusSharing,
+								Integer.MAX_VALUE);
+						mLiveStatus = Constants.kVideoStatusSharing;
+					}
+				}
+			} else if (chattingMessageWithHeartBT.device_status == 0
+					&& (mLiveStatus == Constants.kVideoStatusBackground || mLiveStatus == Constants.kVideoStatusSharing)) {
+				Utils.getInstance().hideNiftyNotificationView();
+				showNotification(Constants.kVideoStatusLive, 2000);
+				mLiveStatus = Constants.kVideoStatusLive;
+			}
+		}
+	}
+
+	private void showNotification(int videoStatus, int duration) {
+		Configuration cfg = new Configuration.Builder().setAnimDuration(700)
+				.setDispalyDuration(duration).setBackgroundColor("#BB000000")
+				.setTextColor("#ffffff").setTextPadding(5).setViewHeight(48)
+				.setTextLines(1).setTextGravity(Gravity.CENTER).build();
+
+		if (videoStatus == Constants.kVideoStatusBackground) {
+			Utils.getInstance().showNiftyNotificationView(
+					this,
+					(CharSequence) (getResources()
+							.getString(R.string.anchor_in_background)),
+					Effects.flip, mNavigationHeight,
+					R.layout.notification_layout, cfg);
+		} else if (videoStatus == Constants.kVideoStatusSharing) {
+			Utils.getInstance().showNiftyNotificationView(
+					this,
+					(CharSequence) (getResources()
+							.getString(R.string.anchor_sharing)), Effects.flip,
+					mNavigationHeight, R.layout.notification_layout, cfg);
+		} else if (videoStatus == Constants.kVideoStatusLive) {
+			Utils.getInstance().showNiftyNotificationView(
+					this,
+					(CharSequence) (getResources()
+							.getString(R.string.anchor_resume)), Effects.flip,
+					mNavigationHeight, R.layout.notification_layout, cfg);
+		} else if (videoStatus == Constants.kVideoStatusStopped) {
+			Utils.getInstance().showNiftyNotificationView(
+					this,
+					(CharSequence) (getResources()
+							.getString(R.string.error_offline_str)),
+					Effects.flip, mNavigationHeight,
+					R.layout.notification_layout, cfg);
+		}
+	}
+
+	private void displayLivePlayerTitle() {
+		// navDiplayTime = System.currentTimeMillis();
+	}
+
+	private void hiddenLivePlayerTitle() {
+		// if (System.currentTimeMillis() - this.navDiplayTime > 5*1000) {
+		// LinearLayout title = (LinearLayout)
+		// this.findViewById(R.id.liveplayer_nav_id);
+		// title.setVisibility(View.INVISIBLE);
+		// }
+	}
+
+	private void displayCameraPlayer() {
+		// TODO Auto-generated method stub
+		// AppSysTool.LogDebug("stream info "+prePlayerRunnable.getPlayHost()+"port = "+
+		// prePlayerRunnable.getPlayPort()+" camid "+
+		// devID+" playid "+prePlayerRunnable.getPlayID());
+
+		// flymqRunner = new FlymqRunner(flymqHandler,
+		// prePlayerRunnable.getPlayHost(),
+		// prePlayerRunnable.getPlayPort(),
+		// prePlayerRunnable.getPlayExkey(),
+		// devID, prePlayerRunnable.getPlayID());
+
+		// AppSysTool.LogDebug("flymq runner start ");
+
+		// new Thread(flymqRunner).start();
+	}
+
+	private void startLivePlayer() {
+
+	}
+
+	private void hiddenProgressBar() {
+		View bar = this.findViewById(R.id.liveplayer_progressbar_id);
+		bar.setVisibility(View.INVISIBLE);
+	}
+
+	private void displayProgressBar() {
+		View bar = this.findViewById(R.id.liveplayer_progressbar_id);
+		bar.setVisibility(View.VISIBLE);
+	}
+
+	@Override
+	public void surfaceChanged(SurfaceHolder holder, int format, int width,
+			int height) {
+		// TODO Auto-generated method stub
+		AppSysTool.LogDebug("Surface is changed " + width + " " + height);
+	}
+
+	public void startLocalInputStream() {
+		try {
+			JNIApi.openInputStream("direct", localScanDevice.getDstHost(),
+					localScanDevice.getDstPort(), localScanDevice.getDevID());
+		} catch (Exception e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+			Toast.makeText(mainActivity, R.string.error_net_str,
+					Toast.LENGTH_SHORT).show();
+			return;
+		}
+
+		DisplayMetrics dm = new DisplayMetrics();
+		mainActivity.getWindowManager().getDefaultDisplay().getMetrics(dm);
+
+		// JH264Player playerView = new JH264Player(mainActivity, playerHandler,
+		// w, h);
+		try {
+			videoPlayer = new VideoPlayer(this.surfaceHolder, dm.widthPixels,
+					dm.heightPixels);
+		} catch (Exception e) {
+			e.printStackTrace();
+			Toast.makeText(mainActivity, R.string.error_net_str,
+					Toast.LENGTH_SHORT).show();
+			return;
+		}
+
+		new Thread(videoDecodeDaemon).start();
+		new Thread(audioDecodeDaemon).start();
+	}
+
+	public void displayPlayerAttibutes() {
+
+		ImageView logo = (ImageView) this
+				.findViewById(R.id.opplayer_user_logo_id);
+		// new Thread(new RunnableImageView(logo,
+		// userWatchingLivingRequest.user_thumb)).start();
+		Utils.getInstance().imageLoader.displayImage(
+				userWatchingLivingRequest.user_thumb, logo);
+		logo.setOnClickListener(mUserLogoClickListener);
+
+		// TextView name = (TextView)
+		// this.findViewById(R.id.opplayer_user_name_id);
+		// name.setText(userWatchingLivingRequest.display_name);
+		//
+		// TextView watching = (TextView)
+		// this.findViewById(R.id.opplayer_watching_count_id);
+		// watching.setText(""+userWatchingLivingRequest.video_watching_count);
+		//
+		// TextView comment = (TextView)
+		// this.findViewById(R.id.opplayer_comment_count_id);
+		// comment.setText(""+userWatchingLivingRequest.video_comment_count);
+		//
+		TextView watch = (TextView) this
+				.findViewById(R.id.opplayer_watch_count_id);
+		watch.setText("" + userWatchingLivingRequest.video_watch_count);
+
+		TextView like = (TextView) this
+				.findViewById(R.id.opplayer_like_count_id);
+		// String countFormat =
+		// getResources().getString(R.string.like_count_str);
+		// String countText = String.format(countFormat,
+		// String.valueOf(userWatchingLivingRequest.video_like_count));
+		like.setText("" + userWatchingLivingRequest.video_like_count);
+
+		String uname = Utils.getInstance().getUsername(this);
+		if (uname != null
+				&& !uname.equalsIgnoreCase(userWatchingLivingRequest.uname)) {
+			follow_btn.setVisibility(View.VISIBLE);
+			if (userWatchingLivingRequest.followed_flag == 1) {
+				follow_btn.setText(R.string.unfollow_action_str);// .setVisibility(View.INVISIBLE);
+			} else {
+				follow_btn.setText(R.string.follow_action_str);// .setVisibility(View.INVISIBLE);
+			}
+		} else {
+			follow_btn.setText(R.string.follow_action_str);
+		}
+
+		if (userWatchingLivingRequest.like_flag == 1) {
+			like_bt_img.setImageResource(R.drawable.icon_live_liked);
+			mCurrentVideoLiked = true;
+		} else {
+			like_bt_img.setImageResource(R.drawable.icon_live_like);
+			mCurrentVideoLiked = false;
+		}
+
+		if (userWatchingLivingRequest.isliving == 1) {
+			isLiveIcon.setImageResource(R.drawable.icon_live_user_cam_online);
+			livePrompt
+					.setText(getResources().getString(R.string.live_ison_str));
+			liveStatusLayout.setVisibility(View.VISIBLE);
+		} else {
+			isLiveIcon.setImageResource(R.drawable.icon_live_user_cam_end);
+			String timeDesc = Utils.getInstance().getVideoStartTimeDesc(
+					userWatchingLivingRequest.video_stop_live_time)
+					+ getResources().getString(R.string.end_str);
+			livePrompt.setText(timeDesc);
+			liveStatusLayout.setVisibility(View.GONE);
+		}
+
+		TextView city = (TextView) this.findViewById(R.id.opplayer_user_gps_id);
+		String cityinfo = ""
+				+ Utils.getInstance().getDistanceDesc(
+						userWatchingLivingRequest.distance,
+						userWatchingLivingRequest.gps_flag);
+		city.setText(cityinfo);
+	}
+
+	private void hideVideoPlayer() {
+		mCenterLayout = (CenterLayout) findViewById(R.id.centerLayout);
+		mCenterLayout.setVisibility(View.GONE);
+	}
+
+	private void setLandscapeState() {
+		getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+		mCenterLayout.setLayoutParams(new FrameLayout.LayoutParams(
+				LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+//		mMediaController.zoomOut();
+		mMediaController.addView(mCenterLayout);
+	}
+
+	private void setPortraitState() {
+		DisplayMetrics dm = new DisplayMetrics();
+		mainActivity.getWindowManager().getDefaultDisplay().getMetrics(dm);
+		int width = dm.widthPixels;
+		int height = (dm.widthPixels / 16) * 8;
+
+		getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+		mCenterLayout.setLayoutParams(new FrameLayout.LayoutParams(width,
+				height));
+		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+		mMediaController.addView(mCenterLayout);
+//		mMediaController.zoomIn();
+
+	}
+
+	private void showVideoPlayer(String playURL) {
+//		if (!io.vov.vitamio.LibsChecker.checkVitamioLibs(this,
+//				R.string.init_decoders, R.raw.libarm))
+		if (!io.vov.vitamio.LibsChecker.checkVitamioLibs(this))
+			return;
+
+		mInputFilePlayURL = playURL;
+
+		DisplayMetrics dm = new DisplayMetrics();
+		mainActivity.getWindowManager().getDefaultDisplay().getMetrics(dm);
+
+//		mVideoView = (VideoView) findViewById(R.id.surface_view);
+//		mCenterLayout = (CenterLayout) findViewById(R.id.centerLayout);
+		mCenterLayout.getLayoutParams().width = dm.widthPixels;
+		mCenterLayout.getLayoutParams().height = (dm.widthPixels / 16) * 8;
+
+		mCenterLayout.setVisibility(View.VISIBLE);
+
+		mVideoView.setVideoQuality(MediaPlayer.VIDEOQUALITY_HIGH);
+		mVideoView.setVideoURI(Uri.parse(mInputFilePlayURL));
+		mVideoView.setOnPreparedListener(new OnPreparedListener() {
+			@Override
+			public void onPrepared(MediaPlayer mp) {
+//				mVideoView.setSubShown(true);
+				hiddenProgressBar();
+			}
+		});
+
+//		mMediaController = new MediaController(this);
+//		mMediaController.setOnChangeSizeListener(new OnClickListener() {
+//
+//			@Override
+//			public void onClick(View v) {
+//				if (getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+//					setPortraitState();
+//					bAllowChangeOrientation = false;
+//				} else {
+//					if (!bIsFullScreen) {
+//						getWindow().addFlags(
+//								WindowManager.LayoutParams.FLAG_FULLSCREEN);
+//						mCenterLayout
+//								.setLayoutParams(new FrameLayout.LayoutParams(
+//										LayoutParams.MATCH_PARENT,
+//										LayoutParams.MATCH_PARENT));
+//						mMediaController.set
+//						mVideoView.setVideoLayout(VideoView.VIDEO_LAYOUT_SCALE,
+//								0.75f);
+//						bIsFullScreen = true;
+//					} else {
+//						setPortraitState();
+//						mVideoView.setVideoLayout(VideoView.VIDEO_LAYOUT_SCALE,
+//								0);
+//						bIsFullScreen = false;
+//					}
+//					mMediaController.hide();
+//				}
+//			}
+//		});
+		
+		mVideoView.setMediaController(mMediaController);
+		mVideoView.setOnCompletionListener(new OnCompletionListener() {
+
+			@Override
+			public void onCompletion(MediaPlayer mp) {
+				// finish();
+				if (getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+					bAllowChangeOrientation = false;
+					setPortraitState();
+				}
+			}
+		});
+		mVideoView.setOnErrorListener(new OnErrorListener() {
+
+			@Override
+			public boolean onError(MediaPlayer arg0, int arg1, int arg2) {
+				return false;
+			}
+		});
+		mVideoView.requestFocus();
+	}
+
+	public void startRemoteInputStream() {
+		TextView title = (TextView) this.findViewById(R.id.opplayer_title_id);
+		title.setText(displayName
+				+ getResources().getString(R.string.living_str));
+
+		DisplayMetrics dm = new DisplayMetrics();
+		mainActivity.getWindowManager().getDefaultDisplay().getMetrics(dm);
+		View surface = mainActivity
+				.findViewById(R.id.liveplayer_surfaceview_id);
+		surface.setVisibility(View.VISIBLE);
+		surface.getLayoutParams().width = dm.widthPixels;
+		surface.getLayoutParams().height = (dm.widthPixels / 16) * 8;
+
+		// Disable video player
+		hideVideoPlayer();
+
+		// View video = mainActivity.findViewById(R.id.liveplayer_videoview_id);
+		// video.setVisibility(View.INVISIBLE);
+		// video.getLayoutParams().width = dm.widthPixels;
+		// video.getLayoutParams().height = (dm.widthPixels / 16) *8;
+		//
+		displayPlayerAttibutes();
+
+		AppSysTool.LogDebug("EntrystartRemoteInputStream ");
+		try {
+			// userWatchingLivingRequest.exkey = "acb000000000000001";
+			JNIApi.openInputStream(userWatchingLivingRequest.protocol,
+					userWatchingLivingRequest.srchost,
+					userWatchingLivingRequest.srcport,
+					userWatchingLivingRequest.exkey);
+		} catch (Exception e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+			Toast.makeText(mainActivity, R.string.error_net_str,
+					Toast.LENGTH_SHORT).show();
+			return;
+		}
+
+		// JH264Player playerView = new JH264Player(mainActivity, playerHandler,
+		// w, h);
+		AppSysTool.LogDebug("Width x Height: " + dm.widthPixels + " x "
+				+ dm.heightPixels);
+		try {
+			videoPlayer = new VideoPlayer(this.surfaceHolder, dm.widthPixels,
+					dm.heightPixels);
+		} catch (Exception e) {
+			e.printStackTrace();
+			Toast.makeText(mainActivity, R.string.error_net_str,
+					Toast.LENGTH_SHORT).show();
+			return;
+		}
+		new Thread(videoDecodeDaemon).start();
+		new Thread(audioDecodeDaemon).start();
+
+		livingTime = userWatchingLivingRequest.video_start_live_time;
+
+		initUpdateLivingTimeTimer();
+
+		// AppSysTool.LogDebug("playingHeartbt Start "+playingHeartbt+" "+playVideoRequest);
+		// if (this.playingHeartbt == null) {
+		// playingHeartbt = new HTTPUserWatchingHeartbtDaemon(httpHandler);
+		// }
+		// this.playingHeartbt.setHTTPParameters(userWatchingLivingRequest.linkID,
+		// userWatchingLivingRequest.logid,
+		// OPPlayerActivity.HTTP_WATCHING_HEARTBT_OKK,
+		// OPPlayerActivity.HTTP_WATCHING_HEARTBT_OKK);
+		// new Thread(this.playingHeartbt).start();
+
+		chattingMessageWithHeartBT.startHttpRequest(
+				userWatchingLivingRequest.linkID,
+				userWatchingLivingRequest.watchid, Utils.getInstance()
+						.getSessionID(mainActivity));
+	}
+
+	public void startRemoteInputFile() {
+		TextView title = (TextView) this.findViewById(R.id.opplayer_title_id);
+		title.setText(displayName
+				+ getResources().getString(R.string.history_str));
+
+		DisplayMetrics dm = new DisplayMetrics();
+		mainActivity.getWindowManager().getDefaultDisplay().getMetrics(dm);
+		View surface = mainActivity
+				.findViewById(R.id.liveplayer_surfaceview_id);
+		surface.setVisibility(View.INVISIBLE);
+		surface.getLayoutParams().width = dm.widthPixels;
+		surface.getLayoutParams().height = (dm.widthPixels / 16) * 8;
+
+		// View video = mainActivity.findViewById(R.id.liveplayer_videoview_id);
+		// video.setVisibility(View.VISIBLE);
+		// video.getLayoutParams().width = dm.widthPixels;
+		// video.getLayoutParams().height = (dm.widthPixels / 16) *8;
+		//
+
+		if (userWatchingLivingRequest.fileurl == null
+				|| userWatchingLivingRequest.fileurl.length() < 10) {
+			Toast.makeText(mainActivity, R.string.warning_video_exist_str,
+					Toast.LENGTH_SHORT).show();
+			return;
+		}
+
+		showVideoPlayer(userWatchingLivingRequest.fileurl);
+		displayPlayerAttibutes();
+
+		// Uri uri = Uri.parse(userWatchingLivingRequest.fileurl);
+		// videoPlayerView =
+		// (VideoView)this.findViewById(R.id.liveplayer_videoview_id);
+		// //videoView.setMediaController(new MediaController(this));
+		//
+		// videoPlayerView.setOnErrorListener(new MediaPlayer.OnErrorListener()
+		// {
+		//
+		// @Override
+		// public boolean onError(MediaPlayer arg0, int arg1, int arg2) {
+		// if(arg2 == MediaPlayer.MEDIA_ERROR_MALFORMED) {
+		// mStreamCanPlay = false;
+		// }
+		// else if(arg2 == MediaPlayer.MEDIA_ERROR_IO) {
+		// mStreamCanPlay = false;
+		// }
+		// else if(arg2 == MediaPlayer.MEDIA_ERROR_UNSUPPORTED) {
+		// mStreamCanPlay = false;
+		// }
+		//
+		// showCannotPlay();
+		//
+		// // Avoid system output.
+		// return true;
+		// }
+		// });
+		//
+		// videoPlayerView.setOnCompletionListener(new
+		// MediaPlayer.OnCompletionListener() {
+		//
+		// @Override
+		// public void onCompletion(MediaPlayer mp) {
+		// // TODO Auto-generated method stub
+		// if(mStreamCanPlay) {
+		// mp.seekTo(0);
+		// mp.pause();
+		// View pv = mainActivity.findViewById(R.id.opplayer_play_button_id);
+		// pv.setVisibility(View.VISIBLE);
+		// videoPlayerView.setTag(0);
+		// }
+		// }
+		// });
+		//
+		// videoPlayerView.setOnPreparedListener(new
+		// MediaPlayer.OnPreparedListener() {
+		//
+		// @Override
+		// public void onPrepared(MediaPlayer mp) {
+		// // TODO Auto-generated method stub
+		// hiddenProgressBar();
+		// }
+		// });
+		//
+		// View fl = this.findViewById(R.id.liveplayer_framelayout_id);
+		// fl.setTag(videoPlayerView);
+		//
+		// fl.setOnClickListener(new View.OnClickListener() {
+		//
+		// @Override
+		// public void onClick(View arg0) {
+		// // TODO Auto-generated method stub
+		//
+		// AppSysTool.LogDebug("Stop click");
+		//
+		// VideoView vv = (VideoView)arg0.getTag();
+		// View pv = mainActivity.findViewById(R.id.opplayer_play_button_id);
+		// int tag = (Integer) vv.getTag();
+		// if (tag == 1) {
+		// videoPlayerView.setTag(0);
+		// pv.setVisibility(View.VISIBLE);
+		// vv.pause();
+		// } else {
+		// videoPlayerView.setTag(1);
+		// pv.setVisibility(View.INVISIBLE);
+		// vv.start();
+		// }
+		// }
+		// });
+		//
+		//
+		// videoPlayerView.setVideoURI(uri);
+		// videoPlayerView.start();
+		// videoPlayerView.setTag(1);
+		// videoPlayerView.requestFocus();
+
+		// AppSysTool.LogDebug("playingHeartbt Start "+playingHeartbt+" "+playVideoRequest);
+		// if (this.playingHeartbt == null) {
+		// playingHeartbt = new HTTPUserWatchingHeartbtDaemon(httpHandler);
+		// }
+		// this.playingHeartbt.setHTTPParameters(userWatchingLivingRequest.linkID,
+		// userWatchingLivingRequest.logid,
+		// OPPlayerActivity.HTTP_WATCHING_HEARTBT_OKK,
+		// OPPlayerActivity.HTTP_WATCHING_HEARTBT_OKK);
+		// new Thread(this.playingHeartbt).start();
+
+		AppSysTool.LogDebug("chattingMessageWithHeartBT "
+				+ chattingMessageWithHeartBT + "userWatchingLivingRequest "
+				+ userWatchingLivingRequest);
+		chattingMessageWithHeartBT.startHttpRequest(
+				userWatchingLivingRequest.linkID,
+				userWatchingLivingRequest.watchid, Utils.getInstance()
+						.getSessionID(mainActivity));
+
+		initUpdateLivingTimeTimer();
+		// TextView time = (TextView) this.findViewById(R.id.opplayer_time_id);
+		// time.setVisibility(View.INVISIBLE);
+	}
+
+	private void showCannotPlay() {
+		AlertDialog.Builder alert = new AlertDialog.Builder(this);
+		alert.setTitle(getResources().getString(R.string.player_error_title));
+		alert.setMessage(getResources().getString(
+				R.string.player_cannot_play_desc));
+
+		alert.setPositiveButton(getResources().getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+
+					@Override
+					public void onClick(DialogInterface arg0, int arg1) {
+						OPPlayerActivity.this.finish();
+					}
+				});
+
+		alert.show();
+	}
+
+	public void startRemoteOutputStream() {
+
+		try {
+			int ret = JNIApi.openOutputStream(
+					playVoiceRequest.getStreamProtocol(),
+					playVoiceRequest.getDstHost(),
+					playVoiceRequest.getDstPort(),
+					playVoiceRequest.getStreamExkey());
+		} catch (Exception e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+			Toast.makeText(mainActivity, R.string.error_net_str,
+					Toast.LENGTH_SHORT).show();
+			return;
+		}
+
+		// new Thread(videoEncodeDaemon).start();
+		new Thread(audioEncodeDaemon).start();
+	}
+
+	@Override
+	public void surfaceCreated(SurfaceHolder holder) {
+		// TODO Auto-generated method stub
+		AppSysTool.LogDebug("Surface is created for play " + linkID);
+
+		DisplayMetrics dm = new DisplayMetrics();
+		mainActivity.getWindowManager().getDefaultDisplay().getMetrics(dm);
+
+		holder.setFixedSize(dm.widthPixels, (dm.widthPixels / 16) * 8);
+
+		if (linkID != null) {
+			AppSysTool.LogDebug("SufaceCreated " + linkID);
+			this.userWatchingLivingRequest.startHttpRequest(userName, linkID,
+					sessionID);
+			// new Thread(playVideoRequest).start();
+		} else {
+			this.localScanDevice.setRequestInfo(5801,
+					OPPlayerActivity.LOCAL_SCANDEV_OKK,
+					OPPlayerActivity.LOCAL_SCANDEV_ERR);
+			new Thread(localScanDevice).start();
+		}
+	}
+
+	private void stopWatching() {
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUserStopWatchingLivingAPI);
+		stb.append("linkid=" + userWatchingLivingRequest.linkID);
+		stb.append("&logid=" + userWatchingLivingRequest.watchid);
+
+		if (Utils.getInstance().mHttpTaskSecondary != null
+				&& Utils.getInstance().mHttpTaskSecondary.getStatus() == AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTaskSecondary.cancel(true);
+			Utils.getInstance().mHttpTaskSecondary = null;
+		}
+
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_USER_STOP_WATCHING);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTaskSecondary = new HttpTask(this,
+				new HttpCallbackInterface() {
+
+					@Override
+					public void callBack(int resultCode, int actionId,
+							String actionParam, Object netData) {
+						if (resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+							Utils.getInstance().networkFailed(null);
+							return;
+						}
+
+						if (actionId != HttpActionID.ACTION_ID_REQUEST_USER_STOP_WATCHING
+								|| netData == null)
+							return;
+					}
+				});
+		Utils.getInstance().mHttpTaskSecondary.execute(params);
+	}
+
+	public void exitPlayerPage() {
+		// if (userWatchingLivingRequest != null) {
+		// new HTTPUserStopWatchingLivingDaemon(null, 0,
+		// 0).startHttpRequest(userWatchingLivingRequest.linkID,
+		// userWatchingLivingRequest.watchid);
+		// }
+		stopWatching();
+	}
+
+	public void stopAllDaemons() {
+		// TODO Auto-generated method stub
+		AppSysTool.LogDebug("stopAllDaemons");
+
+		// VideoView videoView =
+		// (VideoView)this.findViewById(R.id.liveplayer_videoview_id);
+		// videoView.stopPlayback();
+
+		if (mUpdateLivingTimeTimer != null) {
+			mUpdateLivingTimeTimer.cancel();
+			mUpdateLivingTimeTimer = null;
+		}
+
+		if (this.videoDecodeDaemon != null) {
+			this.videoDecodeDaemon.stopDaemon();
+			videoDecodeDaemon = null;
+		}
+
+		if (this.audioDecodeDaemon != null) {
+			this.audioDecodeDaemon.stopDaemon();
+			audioDecodeDaemon = null;
+		}
+
+		if (this.videoEncodeDaemon != null) {
+			this.videoEncodeDaemon.stopDaemon();
+
+			videoEncodeDaemon = null;
+		}
+
+		if (this.audioEncodeDaemon != null) {
+			this.audioEncodeDaemon.stopDaemon();
+			audioEncodeDaemon = null;
+		}
+
+		if (this.chattingMessageWithHeartBT != null) {
+			this.chattingMessageWithHeartBT.stopRunning();
+
+			chattingMessageWithHeartBT = null;
+		}
+	}
+
+	private void showMoreActionSheet() {
+		ActionSheet
+				.createBuilder(this, getSupportFragmentManager())
+				.setCancelButtonTitle(R.string.cancel_str)
+				.setOtherButtonTitles(
+						getResources().getString(
+								R.string.player_page_inform_video))
+				.setCancelableOnTouchOutside(true).setListener(this).show();
+	}
+
+	@Override
+	public void onOtherButtonClick(ActionSheet actionSheet, int index) {
+		if (index == 0) {
+			reportVideo(null);
+		}
+	}
+
+	private void reportVideo(String reportReason) {
+		String uname = Utils.getInstance().getUsername(this);
+
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kReportVideoAPI);
+		stb.append("device=android");
+		stb.append("&videoid=" + userWatchingLivingRequest.linkID);
+		if (uname != null)
+			stb.append("&informer=" + uname);
+
+		if (reportReason != null)
+			stb.append("&description=" + reportReason);
+
+		if (Utils.getInstance().mHttpTask != null
+				&& Utils.getInstance().mHttpTask.getStatus() == AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_REPORT_VIDEO);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this,
+				new HttpCallbackInterface() {
+					@Override
+					public void callBack(int resultCode, int actionId,
+							String actionParam, Object netData) {
+						if (resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+							Utils.getInstance().networkFailed(null);
+							return;
+						}
+						if (actionId != HttpActionID.ACTION_ID_REQUEST_REPORT_VIDEO
+								|| netData == null)
+							return;
+
+						Toast.makeText(OPPlayerActivity.this,
+								R.string.report_succ_str, Toast.LENGTH_LONG)
+								.show();
+					}
+				});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+
+	@Override
+	public void onDismiss(ActionSheet actionSheet, boolean isCancle) {
+	}
+
+	private void updateUIShowShareVideoDialog(String shareURL) {
+		Utils.getInstance().mWXActionType = Constants.kWeixinShareActionType;
+		Utils.getInstance().mShareURL = shareURL;
+		Utils.getInstance().mThumbPath = null;
+		Utils.getInstance().mShareFrom = Constants.kFromWatch;
+		Utils.getInstance().mShareTitle = mVideoTitle;
+		if (Utils.getInstance().getIsLoggedIn()) {
+			Utils.getInstance().mShareDesc = this.getResources().getString(
+					R.string.found_interesting_str)
+					+ Utils.getInstance().getUserDname(this)
+					+ this.getResources().getString(R.string.comma)
+					+ this.displayName
+					+ this.getResources().getString(
+							R.string.welcome_to_watch_other_str);
+		} else {
+			Utils.getInstance().mShareDesc = getResources().getString(
+					R.string.welcome_to_watch_str);
+		}
+
+		Utils.getInstance().mShareIconURL = userWatchingLivingRequest.video_thumb;
+		Utils.getInstance().mShareActivity = this;
+
+		mShareDialog = new CCVideoShareDialog(this, R.style.CustomDialog);
+
+		mShareDialog.setTitle(R.string.shareto_str);
+		mShareDialog.show();
+	}
+
+	private void shareVideo() {
+		// mActionVideoID = mLbItem.get(position).getVideoID();
+		// mActionVideoPos = position;
+		//
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kDevicePublicPastLivingAPI);
+		stb.append("linkid=" + userWatchingLivingRequest.linkID);
+		stb.append("&sessionid=" + Utils.getInstance().getSessionID(this));
+		stb.append("&public=1");
+
+		if (Utils.getInstance().mHttpTask != null
+				&& Utils.getInstance().mHttpTask.getStatus() == AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_VIDEO_SHARE_ACTION);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this,
+				new HttpCallbackInterface() {
+
+					@Override
+					public void callBack(int resultCode, int actionId,
+							String actionParam, Object netData) {
+						if (resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+							Utils.getInstance().networkFailed(null);
+							return;
+						}
+						if (actionId != HttpActionID.ACTION_ID_REQUEST_VIDEO_SHARE_ACTION
+								|| netData == null)
+							return;
+
+						CCVideoShareVideoEntity shareEntity = (CCVideoShareVideoEntity) netData;
+						if (shareEntity != null
+								&& shareEntity.mRetVal.equals("ok")) {
+							updateUIShowShareVideoDialog(shareEntity.mPublicURL);
+						} else {
+							Toast.makeText(OPPlayerActivity.this,
+									R.string.get_share_address_failed,
+									Toast.LENGTH_LONG);
+						}
+					}
+				});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+
+	@Override
+	public void surfaceDestroyed(SurfaceHolder holder) {
+		// TODO Auto-generated method stub
+		AppSysTool.LogDebug("Surface is destroyed");
+
+	}
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+		AppSysTool.LogDebug("onStart " + this);
+
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+		AppSysTool.LogDebug("onResume " + this);
+		// setPlayerButton2Close();
+		startCommentDaemon();
+	}
+
+	@Override
+	protected void onPause() {
+		super.onPause();
+		AppSysTool.LogDebug("onPause " + this);
+		stopCommentDaemon();
+	}
+
+	@Override
+	protected void onStop() {
+		super.onStop();
+
+		AppSysTool.LogDebug("onStop " + this);
+
+	}
+
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+		AppSysTool.LogDebug("onDestroy " + this);
+
+		JNIApi.closeInputStream();
+		// JNIApi.closeOutputStream();
+
+		// System.exit(0);
+		// tryToReleasePlayer();
+	}
+
+	@Override
+	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		if (keyCode == KeyEvent.KEYCODE_BACK) {
+			if (mFaceRelativeLayout.hideFaceView()) {
+				return true;
+			}
+			quitPlayerPage();
+			return true;
+		}
+		return super.onKeyDown(keyCode, event);
+	}
+
+	@Override
+	public void onClick(View v) {
+		switch (v.getId()) {
+		case R.id.et_sendmessage: {
+			mFaceRelativeLayout.hideFaceLayout();
+			if (mBtLayout != null)
+				mBtLayout.setVisibility(View.GONE);
+			if (mSend != null)
+				mSend.setVisibility(View.VISIBLE);
+			btn_face.setVisibility(View.VISIBLE);
+			break;
+		}
+		case R.id.like_bt: {
+			if (!Utils.getInstance().getIsLoggedIn()) {
+				Intent intent = new Intent(OPPlayerActivity.this,
+						LoginActivity.class);
+				this.startActivityForResult(intent, kActivityResultForLike);
+			} else {
+				ImageView like = (ImageView) findViewById(R.id.icon_like_img_id);
+				int like_flag = userWatchingLivingRequest.like_flag;
+
+				if (like_flag == 0) {
+					TextView like_count = (TextView) mainActivity
+							.findViewById(R.id.opplayer_like_count_id);
+
+					if (chattingMessageWithHeartBT != null) {
+						if (mCurrentVideoLiked == false) {
+							chattingMessageWithHeartBT.video_like_count += 1;
+							mCurrentVideoLiked = true;
+						}
+
+						like_count.setText(""
+								+ chattingMessageWithHeartBT.video_like_count);
+					}
+
+					new HTTPSetUserLikeLivingDaemon(null, 0, 0)
+							.startHttpRequest(userName, sessionID, linkID, 1);
+					like.setImageResource(R.drawable.icon_live_liked);
+					userWatchingLivingRequest.like_flag = 1;
+				} else {
+					TextView like_count = (TextView) mainActivity
+							.findViewById(R.id.opplayer_like_count_id);
+
+					if (chattingMessageWithHeartBT != null) {
+
+						if (mCurrentVideoLiked == true) {
+							mCurrentVideoLiked = false;
+							chattingMessageWithHeartBT.video_like_count -= 1;
+							if (chattingMessageWithHeartBT.video_like_count < 0) {
+								chattingMessageWithHeartBT.video_like_count = 0;
+							}
+						}
+
+						like_count.setText(""
+								+ chattingMessageWithHeartBT.video_like_count);
+					}
+					new HTTPSetUserLikeLivingDaemon(null, 0, 0)
+							.startHttpRequest(userName, sessionID, linkID, 0);
+					like.setImageResource(R.drawable.icon_live_like);
+					userWatchingLivingRequest.like_flag = 0;
+				}
+			}
+			break;
+		}
+		case R.id.follow_status_id:
+			if (!Utils.getInstance().getIsLoggedIn()) {
+				Intent intent = new Intent(OPPlayerActivity.this,
+						LoginActivity.class);
+				this.startActivity(intent);
+			} else {
+				// TODO Auto-generated method stub
+				if ("guest".equalsIgnoreCase(userName)) {
+					Toast.makeText(mainActivity, R.string.warning_login_str,
+							Toast.LENGTH_SHORT).show();
+					return;
+				}
+				if (userWatchingLivingRequest.followed_flag == 0) {
+					new HTTPUserRelationActionDaemon(null, 0, 0)
+							.startHttpRequestToFollow(userName, ownName,
+									"follow");
+					follow_btn.setText(R.string.unfollow_action_str);
+					userWatchingLivingRequest.followed_flag = 1;
+				} else {
+					new HTTPUserRelationActionDaemon(null, 0, 0)
+							.startHttpRequestToFollow(userName, ownName,
+									"unfollow");
+					follow_btn.setText(R.string.follow_action_str);
+					userWatchingLivingRequest.followed_flag = 0;
+				}
+			}
+			break;
+		case R.id.share_bt:
+			shareVideo();
+			break;
+		case R.id.more_bt:
+			showMoreActionSheet();
+			break;
+		default:
+			break;
+		}
+	}
+
+	public class ListAdapter extends BaseAdapter {
+
+		private LayoutInflater inflater;
+
+		public ListAdapter(Context context) {
+			inflater = (LayoutInflater) context
+					.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+		}
+
+		@Override
+		public int getCount() {
+			// TODO Auto-generated method stub
+			if (chattingMessageWithHeartBT == null) {
+				return 0;
+			}
+			ArrayList<MessageEntity> list = chattingMessageWithHeartBT
+					.getArrayList();
+			if (list != null) {
+				return list.size();
+			} else {
+				return 0;
+			}
+
+		}
+
+		@Override
+		public Object getItem(int arg0) {
+			// TODO Auto-generated method stub
+			if (chattingMessageWithHeartBT == null) {
+				return 0;
+			}
+			ArrayList<MessageEntity> list = chattingMessageWithHeartBT
+					.getArrayList();
+			if (list != null) {
+				return list.get(arg0);
+			} else {
+				return null;
+			}
+		}
+
+		@Override
+		public long getItemId(int id) {
+			// TODO Auto-generated method stub
+			return id;
+		}
+
+		@Override
+		public View getView(final int position, View convertView,
+				ViewGroup group) {
+			ViewHolder holder = null;
+			if (convertView == null) {
+				holder = new ViewHolder();
+				convertView = inflater.inflate(R.layout.messge_list_item, null);
+				holder.thumb = (ImageView) convertView
+						.findViewById(R.id.msg_logo_id);
+				holder.nv = (TextView) convertView
+						.findViewById(R.id.msg_name_id);
+				holder.time = (TextView) convertView
+						.findViewById(R.id.msg_time_id);
+				holder.mv = (TextView) convertView
+						.findViewById(R.id.msg_text_id);
+
+				convertView.setTag(holder);
+			} else {
+				holder = (ViewHolder) convertView.getTag();
+			}
+
+			ArrayList<MessageEntity> list = chattingMessageWithHeartBT
+					.getArrayList();
+			int size = list.size();
+			int index = size - 1 - position;
+			if (index < 0) {
+				index = 0;
+			}
+			MessageEntity entity = list.get(index);
+
+			Utils.getInstance().imageLoader.displayImage(entity.user_thumb,
+					holder.thumb);
+
+			holder.nv.setText(entity.display_name);
+
+			holder.time.setText(Utils.getInstance().getVideoStartTimeDesc(
+					entity.ptime));
+
+			SpannableString spannableString = FaceConversionUtil.getInstace()
+					.getExpressionString(OPPlayerActivity.this, entity.content);
+			holder.mv.setText(spannableString);
+
+			return convertView;
+		}
+
+		class ViewHolder {
+			private ImageView thumb;
+			private TextView nv;
+			private TextView time;
+			private TextView mv;
+
+		}
+
+	}
+
+}

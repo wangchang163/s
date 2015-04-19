@@ -1,0 +1,659 @@
+package com.oupai.activity;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.location.Location;
+import android.location.LocationManager;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.support.v4.app.FragmentActivity;
+import android.util.Log;
+import android.support.v4.view.ViewPager;
+import android.view.Menu;
+import android.view.View;
+import android.view.Window;
+import android.view.View.OnClickListener;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.ccvideo.R;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+import com.oupai.adapter.SquareVideoAdapter;
+import com.oupai.dialog.CCVideoFilterDialog;
+import com.oupai.entity.CCVideoLuboEntity;
+import com.oupai.entity.LbItem;
+import com.oupai.entity.LivingEntity;
+import com.oupai.entity.SquareVideoListEntity;
+import com.oupai.fragment.ActionSheet;
+import com.oupai.fragment.ActionSheet.ActionSheetListener;
+import com.oupai.misc.AppSysEnv;
+import com.oupai.misc.Constants;
+import com.oupai.misc.QQAccessTokenKeeper;
+import com.oupai.misc.Utils;
+import com.oupai.misc.WeiboAccessTokenKeeper;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.oupai.runnables.GPSProviderDaemon;
+import com.oupai.view.LBFragmentListOwn;
+import com.oupai.view.LoginPageLayout;
+import com.oupai.view.PagesAdapter;
+import com.oupai.view.RefreshListView;
+import com.oupai.view.RefreshListView.IListViewListener;
+import com.oupai.view.chatface.FaceConversionUtil;
+import com.oupai.view.SquarePageLayout;
+import com.oupai.view.UserPageLayout;
+import com.oupai.view.NotificationBarToast;
+import com.sina.weibo.sdk.constant.WBConstants.Msg;
+import com.tencent.tauth.Tencent;
+
+public class CCVideoSquareActivity extends FragmentActivity implements ActionSheetListener, IListViewListener {
+	public static final int HIDDEN_WARNING_VIEW = 0x712;
+	
+	private static final int UPDATE_LIST_VIEW = 0;
+	private static final int UPDATE_LIST_VIEW_LOAD_MORE = 1;
+	
+	private static final int HIDDEN_SQUARE_LIVING_TIPS     = 0x2000;
+	
+	private static final int SQUARE_LIVING_SHOW_DURATION   = 5000;  //ms
+
+	private static final String TAG = "CCVideoSquareActivity";
+	
+	private Timer squareLivingTipsShowTimer = null;
+	
+	private CCVideoFilterDialog filterDialog = null;
+	private TextView mFilterResults = null;
+	
+	private BroadcastReceiver broadcastReceiver = null;
+	private GPSProviderDaemon gpsProvider = null;
+	
+	private Handler httpResponseHandler = null;
+	
+	private int mLatestLogID = 0;
+
+	public String gps_x = null;
+	public String gps_y = null;
+	
+	public boolean filterOn = false;
+	
+	public boolean genderFilterEnabled = false;
+	public int genderFilterOption = -1;
+	
+	public boolean timeFilterEnabled = false;
+	public int timeFilterOption = -1;
+	
+	public boolean distanceFilterEnabled = false;
+	public int distanceFilterOption = -1;
+	
+	private String listType = "popular";
+	
+	private SquareVideoListEntity mEntity = null;
+	private List<LivingEntity> livingItems = new ArrayList<LivingEntity>();
+	
+	private boolean isStop = false;
+	
+	private List<View>         mPageViewList;
+	private int                mPosition = 0;
+	private ViewPager          mViewPager;
+	private PagesAdapter       mCustomerPagerAdapter;
+	private ImageView          mUser;
+	private ImageView          mSquare;
+	private ImageView          mLiving;
+	
+	private LinearLayout	   mSquareLayout;
+	private LinearLayout	   mUserInfoLayout;
+	
+	private TextView		   mSquareTextView;
+	private TextView		   mUserInfoTextView;
+	
+	private Context            mContext = this;
+	private SquarePageLayout   mSquarePageLayout;
+	private UserPageLayout     mUserPageLayout;
+//	private LoginPageLayout    mLoginPageLayout;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		requestWindowFeature(Window.FEATURE_NO_TITLE);
+		
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		setContentView(R.layout.ccvideo_main_page);
+
+		initViews();
+		initAdapters();
+		requestData(false);
+		
+		setTheme(R.style.ActionSheetStyleIOS7);
+		
+		new Thread(new Runnable() {
+            @Override
+            public void run() {
+                FaceConversionUtil.getInstace().getFileText(getApplication());
+            }
+        }).start();
+	}
+	
+	private void initViews() {
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()) + 
+				   AppSysEnv.getSquareLivingTips(CCVideoSquareActivity.this));
+		if (!AppSysEnv.getSquareLivingTips(CCVideoSquareActivity.this)) {
+			starShowSquareLivingTips();
+			squareLivingTipsShowTimer = new Timer();
+			squareLivingTipsShowTimer.schedule(squareLivingTipsShowTask, SQUARE_LIVING_SHOW_DURATION);
+		}
+		
+		filterDialog 		= new CCVideoFilterDialog(this);
+		mSquarePageLayout 	= new SquarePageLayout(mContext);
+		mUserPageLayout    	= new UserPageLayout(mContext);
+//		mLoginPageLayout   	= new LoginPageLayout(mContext);
+		
+		mPageViewList 		= new ArrayList<View>();
+		mPageViewList.add(mSquarePageLayout);
+//		if (Utils.getInstance().getIsLoggedIn(CCVideoSquareActivity.this)) {
+			mPageViewList.add(mUserPageLayout);
+//		} else {
+//			mPageViewList.add(mLoginPageLayout);
+//		}
+//		
+		mViewPager = (ViewPager)findViewById(R.id.main_viewpager);
+		mCustomerPagerAdapter = new PagesAdapter(mPageViewList);
+		mViewPager.setAdapter(mCustomerPagerAdapter);
+		mViewPager.setCurrentItem(0);
+		    
+		mSquarePageLayout.initView();
+		mUserPageLayout.initView();
+//		mLoginPageLayout.initView();
+		    
+		mSquare = (ImageView)findViewById(R.id.oupai_square_id);
+		mLiving = (ImageView)findViewById(R.id.oupai_living_id);
+		mUser   = (ImageView)findViewById(R.id.oupai_userinfo_id);
+		
+		mSquareTextView = (TextView)findViewById(R.id.oupai_square_text_id);
+		mUserInfoTextView = (TextView)findViewById(R.id.oupai_userinfo_text_id);
+		mSquareLayout = (LinearLayout)findViewById(R.id.oupai_square_tabbar_id);
+		mUserInfoLayout = (LinearLayout)findViewById(R.id.oupai_userinfo_tabbar_id);
+
+		mSquareLayout.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				mUserPageLayout.isHereToOtherActivity = false;
+				mViewPager.setCurrentItem(0);
+				mSquare.setImageResource(R.drawable.bottom_bar_icon_square_selected);
+				mSquareTextView.setTextColor(getResources().getColor(R.color.tabbar_selected_color));
+				mUser.setImageResource(R.drawable.bottom_bar_icon_user);
+				mUserInfoTextView.setTextColor(getResources().getColor(R.color.tabbar_unselected_color));
+			}	
+		});
+
+		mUserInfoLayout.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				if(Utils.getInstance().getIsLoggedIn()) {
+//					mLoginPageLayout.setWhoLoin("user");
+					mUserPageLayout.isHereToOtherActivity = true;
+					mViewPager.setCurrentItem(1);
+					
+					mUser.setImageResource(R.drawable.bottom_bar_icon_user_selected);
+					mUserInfoTextView.setTextColor(getResources().getColor(R.color.tabbar_selected_color));
+					mSquare.setImageResource(R.drawable.bottom_bar_icon_square); 
+					mSquareTextView.setTextColor(getResources().getColor(R.color.tabbar_unselected_color));
+					
+					mUserPageLayout.refreshUI();
+				}
+				else {
+					Intent intent = new Intent(CCVideoSquareActivity.this, LoginActivity.class);
+					CCVideoSquareActivity.this.startActivity(intent);
+				}
+			}
+		});
+		     
+		mLiving.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				mUserPageLayout.isHereToOtherActivity = false;
+				if (Utils.getInstance().getIsLoggedIn()) {
+					Intent intent = new Intent(CCVideoSquareActivity.this, OupaiLivingActivity.class);
+					CCVideoSquareActivity.this.startActivity(intent);
+				} else {
+//					mLoginPageLayout.setWhoLoin("liveing");
+//					mViewPager.setCurrentItem(1);
+					Intent intent = new Intent(CCVideoSquareActivity.this, LoginActivity.class);
+					CCVideoSquareActivity.this.startActivity(intent);
+				}
+			}	
+		});
+		    
+		httpResponseHandler = new Handler() {        	
+			public void handleMessage(Message msg) {
+	        	try {
+	        		switch(msg.what) {        		
+	    	        	case HIDDEN_SQUARE_LIVING_TIPS:
+	    	        		stopShowSquareLivingTips();
+	    	        		break;
+	    	        		
+	            		default:
+	                    	break;
+	        		}
+	        	} catch(Exception e) {
+	        	}
+	    	}
+	    };
+	    	
+	    gpsProvider = new GPSProviderDaemon(this);
+	}
+	
+	public void initAdapters() {
+		mSquarePageLayout.initAdapters(livingItems);
+	}
+	
+	public void requestData(boolean reset) {
+		if (reset) {
+			mLatestLogID = 0;
+			if(filterOn==false && listType.equalsIgnoreCase("popular")) {
+				mSquarePageLayout.setmFilter(true);
+				//mFilterResults.setText(R.string.filter_str);
+			}
+			else {
+				mSquarePageLayout.setmFilter(false);
+				//mFilterResults.setText(R.string.filtered_str);
+			}
+		}
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kDeviceLivingDiscoverAPI);
+		stb.append("sessionid="+Utils.getInstance().getSessionID(this));
+		stb.append("&type="+listType);
+		stb.append("&count=8");
+		stb.append("&maxid="+mLatestLogID);
+
+		LocationManager manager = (LocationManager)this.getSystemService(Context.LOCATION_SERVICE);
+		if (manager != null) {
+			try {
+				Location location = manager.getLastKnownLocation(Utils.getInstance().getLastLocationProvider(this));
+				AppSysTool.LogDebug("Get Location is "+location);
+				if (location != null) {
+					stb.append("&gps_info=1"+
+							   "&gps_accuracy="+location.getAccuracy()+
+							   "&gps_altitude="+location.getAltitude()+
+							   "&gps_bearing="+location.getBearing()+
+							   "&gps_speed="+location.getSpeed()+
+							   "&gps_latitude="+location.getLatitude()+
+							   "&gps_longitude="+location.getLongitude());
+				} else {
+					stb.append("&gps_info=0");
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+		if (genderFilterEnabled) {
+			if (genderFilterOption == 1) {
+				stb.append("&gender=male");
+			} else if (genderFilterOption == 2)  {
+				stb.append("&gender=female");
+			}
+		}
+		
+		if (distanceFilterEnabled) {
+			if (distanceFilterOption == 0) {
+				stb.append("&gpsorder=nearest");
+			}
+			else if (distanceFilterOption == 1) {
+				stb.append("&gpsorder=furthest");
+			}
+		}
+		
+		if (timeFilterEnabled) {
+			if (timeFilterOption == 0) {
+				stb.append("&when=1800");
+			} else if (timeFilterOption == 1) {
+				stb.append("&when=3600");
+			} else if (timeFilterOption == 2) {
+				stb.append("&when=86400");
+			}
+		}
+		
+		if (Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus() == AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_SQUARE_VIDEOS);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam, Object netData) {
+				if (resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					NotificationBarToast.makeText(CCVideoSquareActivity.this,
+		  					  R.string.network_failed,
+		  					  NotificationBarToast.LENGTH_LONG).NotifacationBarShow();
+					return;
+				}
+				Log.e("CCVideoSquareActivity", Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+				if (actionId != HttpActionID.ACTION_ID_REQUEST_SQUARE_VIDEOS || netData == null)
+					return;
+				
+				mEntity = (SquareVideoListEntity)netData;
+				if (mEntity.mRetVal.equalsIgnoreCase("ok")) {
+					updateData();
+				} else {
+					Toast.makeText(CCVideoSquareActivity.this, R.string.load_data_failed, Toast.LENGTH_LONG);
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private Handler handler = new Handler() {
+        public void handleMessage(android.os.Message msg) {
+            try {
+                switch (msg.what) {
+                    case UPDATE_LIST_VIEW: {
+                		mLatestLogID = 0;
+                    	requestData(true);
+                    	
+                    	mSquarePageLayout.notifyDataSetChanged();
+                    	mSquarePageLayout.stopRefresh();
+                    	mSquarePageLayout.stopLoadMore();
+                    	
+                    	//mVideoAdapter.notifyDataSetChanged();
+                    	//mViewListview.stopRefresh();
+                    	//mViewListview.stopLoadMore();
+                        break;
+                    }
+                    case UPDATE_LIST_VIEW_LOAD_MORE: {
+                    	requestData(false);
+                    	mSquarePageLayout.notifyDataSetChanged();
+                    	mSquarePageLayout.stopRefresh();
+                    	mSquarePageLayout.stopLoadMore();
+                    	//mVideoAdapter.notifyDataSetChanged();
+                    	//mViewListview.stopRefresh();
+                        //mViewListview.stopLoadMore();
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+            }
+        };
+    };
+
+	private void updateData() {
+		if (mLatestLogID == 0) {
+			livingItems.clear();
+		}
+		for (int i = 0; i < mEntity.mList.size(); i++) {
+			livingItems.add(mEntity.mList.get(i));
+		}
+		if(mEntity.mList.size() != 0) {
+			mLatestLogID = mEntity.mList.get(mEntity.mList.size()-1).logid;
+		}
+		//mVideoAdapter.notifyDataSetChanged();
+		mSquarePageLayout.notifyDataSetChanged();
+	}
+	
+	private void registerBroadcaster() {
+		IntentFilter intentFilter = new IntentFilter();
+		intentFilter.addAction("CLOSE_ALL");
+		broadcastReceiver = new BroadcastReceiver() {
+			@Override
+			public void onReceive(Context context, Intent intent) {
+				finish();
+			}
+		};
+		registerReceiver(broadcastReceiver, intentFilter);
+	}
+		
+	private void showFilterActionSheet() {
+		ActionSheet.createBuilder(this, getSupportFragmentManager())
+		.setCancelButtonTitle(R.string.cancel_str)
+		.setOtherButtonTitles(
+				getResources().getString(R.string.filter_all), 
+				getResources().getString(R.string.filter_only_male), 
+				getResources().getString(R.string.filter_only_female),
+				getResources().getString(R.string.filter_custom))
+		.setTag("FilterSource")
+		.setCancelableOnTouchOutside(true).setListener(this).show();
+	}
+	
+	TimerTask squareLivingTipsShowTask = new TimerTask() {
+		@Override
+		public void run() {
+			Message msg = new Message();
+			msg.what = HIDDEN_SQUARE_LIVING_TIPS;
+			httpResponseHandler.sendMessage(msg);
+		}
+	};
+	
+	private void starShowSquareLivingTips() {
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+		if (!AppSysEnv.getSquareLivingTips(CCVideoSquareActivity.this)) {
+			Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+			View squareLivingTips = findViewById(R.id.square_living_tips_id);
+			squareLivingTips.setVisibility(View.VISIBLE);
+			AppSysEnv.setSquareLivingTips(CCVideoSquareActivity.this);
+		}
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+	}
+	
+	private void stopShowSquareLivingTips() {
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+		View squareLivingTips = findViewById(R.id.square_living_tips_id);
+		squareLivingTips.setVisibility(View.INVISIBLE);
+		if (squareLivingTipsShowTimer != null) {
+			squareLivingTipsShowTimer.cancel();
+			squareLivingTipsShowTimer = null;
+		}
+	}
+	
+	private void clearFilters() {
+		genderFilterEnabled = false;
+		genderFilterOption = -1;
+		
+		timeFilterEnabled = false;
+		timeFilterOption = -1;
+		
+		distanceFilterEnabled = false;
+		distanceFilterOption = -1;
+		
+		filterDialog.clearFilter();
+	}
+	
+	@Override
+	public void onDismiss(ActionSheet actionSheet, boolean isCancel) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onOtherButtonClick(ActionSheet actionSheet, int index) {
+		if(index == 0) {
+			listType = "popular";
+			filterOn = false;
+			clearFilters();
+			requestData(true);
+		}
+		else if(index == 1) {
+			listType = "search";
+			filterOn = true;
+			clearFilters();
+			genderFilterEnabled = true;
+			genderFilterOption = 1;
+			requestData(true);
+		}
+		else if(index == 2) {
+			listType = "search";
+			filterOn = true;
+			clearFilters();
+			genderFilterEnabled = true;
+			genderFilterOption = 2;
+			requestData(true);
+		}
+		else if(index == 3) {
+			filterDialog.show();
+		}
+	}
+	
+
+	public void syncSettings()
+	{
+		if(filterDialog.getGenderFilterResult() >= 0) {
+			genderFilterEnabled = true;
+			genderFilterOption = filterDialog.getGenderFilterResult();
+		}
+		
+		if(filterDialog.getTimeFilterResult() >= 0) {
+			timeFilterEnabled = true;
+			timeFilterOption = filterDialog.getTimeFilterResult();
+		}
+		
+		if(filterDialog.getDistanceFilterResult() >= 0) {
+			distanceFilterEnabled = true;
+			distanceFilterOption = filterDialog.getDistanceFilterResult();
+		}
+		
+		if(!genderFilterEnabled && !timeFilterEnabled && !distanceFilterEnabled) {
+			return;
+		}
+		else {
+			listType = "search";
+			filterOn = true;
+			requestData(true);
+		}
+	}
+	
+	@Override 
+	protected void onResume() { 
+		super.onResume(); 
+		
+		//startShowWarning();
+		gpsProvider.startDaemon();
+		
+		AppSysTool.LogDebug("onResume " + this); 
+		
+		mUserPageLayout.resume();
+		
+		if (isStop) {
+			//resetViewInPageViewList();
+			isStop = false;
+		}
+		
+		if(!Utils.getInstance().getIsLoggedIn()) {
+			mViewPager.setCurrentItem(0);
+		}
+	} 
+			
+	@Override 
+	protected void onPause() { 
+		super.onPause(); 
+		gpsProvider.stopDaemon();
+		//stopShowWarning();
+		
+		AppSysTool.LogDebug("onPause "+this); 
+		
+	} 
+	@Override 
+	protected void onStop() { 
+		super.onStop();
+		AppSysTool.LogDebug("onStop "+this); 
+		isStop = true;
+		
+	} 
+	@Override 
+	protected void onDestroy() { 
+		super.onDestroy(); 
+		AppSysTool.LogDebug("onDestroy "+this); 
+				
+//		this.unregisterReceiver(broadcastReceiver);
+	}
+	
+
+	@Override
+	public void onRefresh() {
+		handler.sendEmptyMessage(UPDATE_LIST_VIEW);
+	}
+
+	@Override
+	public void onLoadMore() {
+		handler.sendEmptyMessage(UPDATE_LIST_VIEW_LOAD_MORE);
+	}
+	
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data) { 
+	    super.onActivityResult(requestCode, resultCode, data);
+	    if (requestCode == mUserPageLayout.ACTIVITY_REQUEST_CODE) {
+	        	mUserPageLayout.onActivityResult(requestCode, resultCode, data);
+	    } else {
+//	    mLoginPageLayout.onActivityResult(requestCode, resultCode, data, RESULT_OK);  
+	    }
+	       
+	}        
+    
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		// Inflate the menu; this adds items to the action bar if it is present.
+//		getMenuInflater().inflate(R.menu.login, menu);
+		return true;
+	}
+		
+    public void setmViewPagersetCurrentItem(int paramInt) {
+		mViewPager.setCurrentItem(paramInt);
+	}
+	
+	public void LoginViewInPageViewList() {
+		if (Utils.getInstance().getIsLoggedIn()) {
+//			 mPageViewList.remove(mLoginPageLayout);
+			 mUserPageLayout.LoginUpdateUI();
+			 mPageViewList.add(mUserPageLayout);
+		 } else {
+			 mViewPager.setCurrentItem(0);
+		 }
+		 mCustomerPagerAdapter.notifyDataSetChanged(); 
+	}
+	
+	private void resetViewInPageViewList() {
+//		mPageViewList.remove(mLoginPageLayout);
+	  	mPageViewList.remove(mUserPageLayout);
+		  if (Utils.getInstance().mUserInfoChange) {
+	  		 mUserPageLayout.LoginUpdateUI();
+	  		 Utils.getInstance().mUserInfoChange = false;
+	  	  }
+		  if(Utils.getInstance().getIsLoggedIn()) {
+			mPageViewList.add(mUserPageLayout); 
+		  } else {
+			  mUserPageLayout.isHereToOtherActivity = false;
+//			mPageViewList.add(mLoginPageLayout);
+		  }
+		  if(mUserPageLayout.isHereToOtherActivity) {
+			  mViewPager.setCurrentItem(1);
+			  mUserPageLayout.isHereToOtherActivity = true;
+		  } else {
+			  mUserPageLayout.isHereToOtherActivity = false;
+			  mViewPager.setCurrentItem(0);
+		  }
+		  mCustomerPagerAdapter.notifyDataSetChanged();
+	}
+}

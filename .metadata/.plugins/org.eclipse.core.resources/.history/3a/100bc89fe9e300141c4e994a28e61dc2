@@ -1,0 +1,344 @@
+package com.oupai.activity;
+
+import java.io.File;
+
+import com.ccvideo.R;
+import com.oupai.asynctasks.AsyncDownloadTask;
+import com.oupai.entity.CCVideoCheckUpdateEntity;
+import com.oupai.misc.AppSysEnv;
+import com.oupai.misc.Constants;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.umeng.analytics.MobclickAgent;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.Bundle;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class CCVideoSettingActivity  extends Activity implements View.OnClickListener{
+	public final static int CC_USER_QUIT_CODE = 0x1001;
+	//private View mFragmentView = null;
+	private String updateVersionURL = null;
+	//private TextView mRecoverPassword = null;
+	private TextView mCurrentVersion = null;
+	//private ImageView mUserIconImageView = null;
+	private ProgressDialog mProgressDialog = null;
+	
+	private CCVideoCheckUpdateEntity mEntity = null;
+	
+	private ImageView mBackBtn;
+	private TextView mTitleView;
+	
+	private boolean configInfo = false;
+	private String currentVersion = null;
+	private String updateVersion = null;
+	private String updateUrl = null;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		Bundle b = this.getIntent().getExtras();
+        if (b != null) {
+        	configInfo = b.getBoolean("config_info");
+        	currentVersion = b.getString("current_version");
+        	updateVersion = b.getString("update_version");
+        	updateUrl = b.getString("update_url");
+        }
+		
+		setContentView(R.layout.oupai_setting_layout);
+
+		initViews();
+		fetchUserInformation();
+		initListeners();
+		initActivityEvents();
+	}
+	private void initViews() {
+		mTitleView = (TextView) findViewById(R.id.simple_title);
+		mTitleView.setText(R.string.settings);
+		mBackBtn = (ImageView) findViewById(R.id.simple_back);
+		mBackBtn.setOnClickListener(this);
+		
+		//mRecoverPassword = (TextView)findViewById(R.id.login_recovery_id);
+		mCurrentVersion = (TextView)findViewById(R.id.current_version_id);
+		mCurrentVersion.setText(getResources().getString(R.string.current_version_str)+Utils.getInstance().mAppVersion);
+		//mUserIconImageView = (ImageView)findViewById(R.id.user_icon_id);
+		
+		View update = this.findViewById(R.id.update_flag_id);
+		if (this.updateVersion != null && (!this.updateVersion.equalsIgnoreCase(this.currentVersion))) {
+			update.setVisibility(View.VISIBLE);
+		}
+	}
+	
+	private void initListeners() {
+//		mRecoverPassword.setOnClickListener(new OnClickListener() {
+//			
+//			@Override
+//			public void onClick(View arg0) {
+//				Intent intent = new Intent(CCVideoSettingActivity.this, RecoveryActivity.class);
+//				startActivity(intent);
+//			}
+//		});
+	}
+	
+	@Override
+	public void onClick(View v) {
+		switch (v.getId()) {
+			case R.id.simple_back: {
+	        	this.finish();
+	        	break;
+	        }
+			default:
+	            break;
+		}
+	}
+	
+	private void checkUpdate() {
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kCheckUpdateAPI);
+		stb.append("device=android&version="+Utils.getInstance().mAppVersion);
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_CHECK_UPDATE);
+		params.setActionUrl(stb.toString());
+		
+		if(mProgressDialog != null) {
+			mProgressDialog.dismiss();
+			mProgressDialog = null;
+		}
+		mProgressDialog = ProgressDialog.show(this, getResources().getString(R.string.check_update_str), getResources().getString(R.string.pls_wait_str));
+		
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam, Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(mProgressDialog);
+					return;
+				}
+				if(actionId != HttpActionID.ACTION_ID_CHECK_UPDATE || netData==null)
+					return;
+				
+				if(mProgressDialog != null) {
+					mProgressDialog.dismiss();
+					mProgressDialog = null;
+				}
+				updateData(netData, actionParam);
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void updateData(Object netData, String actionParam) {
+		if(netData==null) {
+			showAlertCheckError();
+			return;
+		}
+		
+		mEntity = (CCVideoCheckUpdateEntity)netData;
+		if(mEntity.mCurrentVersion==null || mEntity.mUpdateVersion==null) {
+			showAlertCheckError();
+		}
+		else if(Utils.getInstance().compareVersion(mEntity.mCurrentVersion, mEntity.mUpdateVersion)>0) {
+			showAlertHasUpdate();
+		}
+		else {
+			showAlertAlreadyLatest();
+		}
+	}
+	
+	private void showAlertCheckError() {
+		Toast.makeText(this, R.string.possible_network_issue_str, Toast.LENGTH_LONG).show();
+	}
+	
+	private void showAlertHasUpdate() {
+		AlertDialog.Builder alert = new AlertDialog.Builder(this);
+		alert.setTitle(getResources().getString(
+				R.string.update_app_str));
+		alert.setMessage(R.string.has_update_str);
+		
+		alert.setPositiveButton(getResources()
+				.getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+
+						new AsyncDownloadTask(CCVideoSettingActivity.this,
+								CCVideoSettingActivity.this.mEntity.mUpdateURL,
+								new AsyncDownloadTask.CallBack() {
+
+									@Override
+									public void callback() {
+										CCVideoSettingActivity.this.downloadNewAPK();
+									}
+								}).execute(CCVideoSettingActivity.this.mEntity.mUpdateURL);
+
+					}
+				});
+		
+		alert.setNegativeButton(getResources().getString(R.string.cancel_str), new DialogInterface.OnClickListener() {
+			
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				dialog.dismiss();
+				
+			}
+		});
+		
+		alert.show();
+	}
+	
+	private void showAlertAlreadyLatest() {
+		View update = this.findViewById(R.id.update_flag_id);
+		update.setVisibility(View.INVISIBLE);		
+		
+		Toast.makeText(this, R.string.latest_version_str, Toast.LENGTH_LONG).show();
+	}
+	
+	private void initActivityEvents() {
+		RelativeLayout feedback = (RelativeLayout)findViewById(R.id.feedback_section_id);
+		feedback.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				// TODO Auto-generated method stub
+				Bundle b = new Bundle();
+				
+				Intent intent = new Intent(CCVideoSettingActivity.this, CCVideoFeedbackActivity.class);
+				intent.putExtras(b);
+				
+				startActivity(intent);
+			}
+		});
+		
+		RelativeLayout about = (RelativeLayout)findViewById(R.id.about_us_section_id);
+		about.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				Bundle b = new Bundle();
+				Intent intent = new Intent(CCVideoSettingActivity.this, CCVideoAboutOupaiActivity.class);
+				intent.putExtras(b);
+				b.putString("mCurrentVersion", mEntity.mCurrentVersion);
+				startActivity(intent);
+			}
+		});
+		
+		RelativeLayout copyright = (RelativeLayout)findViewById(R.id.copyright_section_id);
+		copyright.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				Bundle b = new Bundle();
+				
+				Intent intent = new Intent(CCVideoSettingActivity.this, CCVideoCopyrightActivity.class);
+				intent.putExtras(b);
+				
+				startActivity(intent);
+			}
+		});
+		
+		RelativeLayout update = (RelativeLayout)findViewById(R.id.check_update_layout_id);
+		update.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				checkUpdate();
+			}
+		});
+	}
+	
+	public void storeUserInformation(String email, String phone) 
+	{
+		SharedPreferences sp = this.getSharedPreferences(AppSysEnv.APPSYS_LOCAL_DBFILE, Context.MODE_WORLD_WRITEABLE);
+    	
+		sp.edit().putString(AppSysEnv.APPSYS_EMAIL_KEYSTR, email).commit();
+    	sp.edit().putString(AppSysEnv.APPSYS_PHONE_KEYSTR, phone).commit();
+	}
+	
+	public boolean fetchUserInformation() 
+	{
+		SharedPreferences sp = this.getSharedPreferences(AppSysEnv.APPSYS_LOCAL_DBFILE, Context.MODE_WORLD_WRITEABLE);
+		
+		String uname, email, phone, weixin, dname, usericon;
+		
+		uname = sp.getString(AppSysEnv.APPSYS_ACCOUNT_KEYSTR, null);
+		email = sp.getString(AppSysEnv.APPSYS_EMAIL_KEYSTR, null);
+		phone = sp.getString(AppSysEnv.APPSYS_PHONE_KEYSTR, null);
+		weixin = sp.getString(AppSysEnv.APPSYS_WEIXIN_KEYSTR, null);
+		dname = sp.getString(AppSysEnv.APPSYS_DNAME, null);
+		usericon = sp.getString(AppSysEnv.APPSYS_ICONURL, null);
+		
+//		TextView nv = (TextView)findViewById(R.id.user_name_id);
+//		nv.setText(dname);
+//		
+//		TextView ev = (TextView)findViewById(R.id.user_email_id);
+//		ev.setText(email);
+		
+//		if(usericon!=null && !usericon.equalsIgnoreCase("")) {
+//			Utils.getInstance().imageLoader.displayImage(usericon, mUserIconImageView);
+//		}
+		
+//		TextView pv = (TextView) mFragmentView.findViewById(R.id.user_info_phone_id);
+//		pv.setText(phone);
+
+    	return true;
+	}
+	
+	private void downloadNewAPK() {
+		final String generateFileName = "/download.apk";
+		Intent intent = new Intent(Intent.ACTION_VIEW);
+		intent.setDataAndType(Uri.fromFile(new File(
+				Utils.getInstance().mAppExternalStoragePath
+						+ generateFileName)), Constants.kAppMimeType);
+		startActivity(intent);
+	}
+//	private void createOptionMenuItems(Menu menu) {
+//        MenuItem addCameraItem = menu.add(0, 1, 0, "����");
+//        //addCameraItem.setIcon(R.drawable.icon_add_cam);
+//        addCameraItem.setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM | MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW);
+//	}
+//	
+//	@Override
+//	public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+//		createOptionMenuItems(menu);
+//		super.onCreateOptionsMenu(menu, inflater);
+//	}
+	
+//	@Override
+//	public boolean onOptionsItemSelected(MenuItem item) {
+//		if(item.getItemId() == 1) {
+//			updateUserInformation();
+//		}
+//		
+//		return super.onOptionsItemSelected(item);
+//	}
+    public void onResume() {
+        super.onResume();
+    }
+    public void onPause() {
+        super.onPause(); 
+    }
+}

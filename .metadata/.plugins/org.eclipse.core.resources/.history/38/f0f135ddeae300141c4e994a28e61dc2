@@ -1,0 +1,63 @@
+package com.oupai.activity;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.ImageView;
+import android.widget.TextView;
+
+import com.ccvideo.R;
+import com.oupai.misc.Utils;
+import com.umeng.analytics.MobclickAgent;
+
+public class CCVideoAboutOupaiActivity extends Activity {
+	private ImageView mBackBtn = null;
+	private TextView tvVersion=null;
+	private String mCurrentVersion=null;
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.ccvideo_about_oupai_layout);
+		
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		initViews();
+		initListeners();
+	}
+	
+	private void initViews() {
+		mBackBtn = (ImageView)findViewById(R.id.return_btn_id);
+		tvVersion=(TextView) findViewById(R.id.app_version_section_id);
+		mCurrentVersion=getIntent().getStringExtra("mCurrentVersion");
+		tvVersion.setText(mCurrentVersion);
+	}
+	
+	private void initListeners() {
+		mBackBtn.setOnClickListener(new OnClickListener() {	
+			@Override
+			public void onClick(View arg0) {
+				returnCancelAction();
+			}
+		});
+	}
+	
+	private void returnCancelAction() {
+		finish();
+	}
+	
+    public void onResume() {
+        super.onResume();
+        MobclickAgent.onPageStart("AboutOupaiActivity"); //统计页面
+        MobclickAgent.onResume(this);          //统计时长
+    }
+
+    public void onPause() {
+        super.onPause();
+        MobclickAgent.onPageEnd("AboutOupaiActivity"); // 保证 onPageEnd 在onPause 之前调用,因为 onPause 中会保存信息 
+        MobclickAgent.onPause(this);
+    }
+}

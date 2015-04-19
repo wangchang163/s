@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.oupai.view.chatface.FaceRelativeLayout 
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/FaceRelativeLayout"
+	android:layout_width="fill_parent"
+	android:layout_height="wrap_content" >
+
+	<LinearLayout
+		android:id="@+id/rl_input"
+		android:layout_width="match_parent"
+		android:layout_height="56dp"
+		android:background="#f0f0f0"
+		android:gravity="center"
+		android:orientation="horizontal"
+		>
+
+		<ImageButton
+			android:id="@+id/btn_face"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginLeft="8dip"
+			android:background="@drawable/face_btn"/>
+		
+		<EditText
+              android:id="@+id/et_sendmessage"
+              android:layout_width="match_parent"
+              android:layout_height="40dp"
+              android:layout_weight="1"
+              android:layout_marginLeft="5dip"
+              android:singleLine="true"
+              android:background="@drawable/edit_dark_border_shape"
+              android:paddingLeft="10dp"
+             android:hint="@string/opplayer_input_hint_str" 
+              android:maxHeight="80dp"
+              android:textSize="16sp">
+          </EditText>
+
+          <Button
+              android:id="@+id/btn_send"
+	          android:layout_width="wrap_content"
+	          android:layout_height="40dip"
+	          android:layout_marginLeft="5dip"
+	          android:layout_marginRight="5dip"
+	          android:text="@string/send_str"
+	          android:textColor="@color/white"
+	          android:background="@drawable/shape"
+	          android:visibility="gone">
+	       </Button>
+	           
+          <LinearLayout
+              android:id="@+id/bt_layout"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:layout_weight="1"
+              android:orientation="horizontal">
+
+			<LinearLayout
+				android:id="@+id/like_bt"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_weight="1"
+				android:orientation="vertical" >
+				<ImageView
+					android:id="@+id/icon_like_img_id"
+					android:layout_width="26dip"
+					android:layout_height="26dip"
+					android:scaleType="fitXY"
+					android:adjustViewBounds="true"
+					android:layout_gravity="center" />
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginLeft="2dip"
+					android:singleLine="true"
+					android:text="@string/bot_button_like_str"
+					android:textColor="@color/color_black"
+					android:textSize="12sp" />
+			</LinearLayout>
+			<LinearLayout
+				android:id="@+id/share_bt"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_weight="1"
+				android:orientation="vertical" >
+				<ImageView
+					android:layout_width="26dip"
+					android:layout_height="26dip"
+					android:layout_gravity="center"
+					android:background="@drawable/history_icon_share" />
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginLeft="2dip"
+					android:singleLine="true"
+					android:text="@string/bot_button_share_str"
+					android:textColor="@color/color_black"
+					android:textSize="12sp" />
+			</LinearLayout>
+			<LinearLayout
+				android:id="@+id/more_bt"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_weight="1"
+				android:orientation="vertical" >
+				<ImageView
+					android:layout_width="26dip"
+					android:layout_height="26dip"
+					android:layout_gravity="center"
+					android:background="@drawable/icon_live_more" />
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:layout_gravity="center"
+					android:layout_marginLeft="2dip"
+					android:singleLine="true"
+					android:text="@string/bot_button_more_str"
+					android:textColor="@color/color_black"
+					android:textSize="12sp"/>
+			</LinearLayout>
+		</LinearLayout>
+		
+	</LinearLayout>
+
+	<RelativeLayout
+		android:id="@+id/ll_facechoose"
+		android:layout_width="fill_parent"
+		android:layout_height="200dp"
+		android:layout_below="@id/rl_input"
+		android:background="#f6f5f5"
+		android:visibility="gone" >
+
+		<android.support.v4.view.ViewPager
+			android:id="@+id/vp_contains"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content" >
+		</android.support.v4.view.ViewPager>
+
+		<LinearLayout
+			android:id="@+id/iv_image"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_alignParentBottom="true"
+			android:layout_marginBottom="6dip"
+			android:gravity="center"
+			android:orientation="horizontal" >
+		</LinearLayout>
+	</RelativeLayout>
+
+</com.oupai.view.chatface.FaceRelativeLayout>

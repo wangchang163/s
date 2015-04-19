@@ -1,0 +1,759 @@
+package com.oupai.activity;
+
+
+import java.io.File;
+import java.net.URLEncoder;
+
+import org.json.JSONObject;
+
+import com.ccvideo.R;
+import com.oupai.entity.CCVideoUploadUserIconEntity;
+import com.oupai.entity.CCVideoUserEditInfoEntity;
+import com.oupai.entity.CCVideoUserInfoEntity;
+import com.oupai.misc.Constants;
+import com.oupai.misc.QQAccessTokenKeeper;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.Net;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.oupai.view.CircularImage;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.location.Location;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.Window;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class CCVideoPersonalInfoActivity extends Activity implements View.OnClickListener{
+	private CCVideoPersonalInfoActivity mainActivity = null;
+	
+	private TextView mTitle;
+	private ImageView mBack;
+	private RelativeLayout myHeadLyt;
+	private RelativeLayout myNameLyt;
+	private RelativeLayout myGenderLyt;
+	private RelativeLayout mChangePasswordLyt;
+	private RelativeLayout mSignatureLyt;
+	
+	private CircularImage myHeadImg;
+	private TextView myNameText;
+	private TextView myGenderText;
+	private TextView myAccountTextView;
+	private TextView mySignatureTextView;
+	
+	private TextView mLogoutLayout;
+	private Bundle mBundle;
+	
+	private static final int IMAGE_REQUEST_CODE = 0;    
+    private static final int CAMERA_REQUEST_CODE = 1;    
+    private static final int RESULT_REQUEST_CODE = 2; 
+    
+    private static final String IMAGE_FILE_NAME = "faceImage.jpg";
+    
+    private CCVideoUserEditInfoEntity mEntity = null;
+    private CCVideoUserInfoEntity mUserInfoEntity = null;
+    private CCVideoUploadUserIconEntity mUploadEntity = null;
+    private String mNewDisplayName = null;
+	private String mNewGender = null;
+	private String mNewSignature = null;
+	
+	private boolean mShowCurrentUser = true;
+	private String mUserName = null;
+	private String mSessionID = null;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		mainActivity = this;
+		this.setContentView(R.layout.activity_person_info_layout);
+
+		initData();
+		
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		initView();
+		initListeners();
+		
+		displayData();
+	}
+
+	private void initData() {
+		Bundle b = this.getIntent().getExtras();
+		if(b != null) {
+			if(b.containsKey("showCurrentUser"))
+				mShowCurrentUser = b.getBoolean("showCurrentUser");
+			else
+				mShowCurrentUser = true;
+			
+			if(b.containsKey("uname"))
+				mUserName = b.getString("uname");
+		}
+		
+		mSessionID = Utils.getInstance().getSessionID(this);
+	}
+
+	private void initView() {
+		mTitle = (TextView) findViewById(R.id.simple_title);
+		mTitle.setText(R.string.personal_data);
+		mBack = (ImageView) findViewById(R.id.simple_back);
+		mBack.setOnClickListener(this);
+		
+		myHeadLyt = (RelativeLayout) findViewById(R.id.myHeadLyt);
+		myHeadLyt.setOnClickListener(this);
+		myNameLyt = (RelativeLayout) findViewById(R.id.myNameLyt);
+		myNameLyt.setOnClickListener(this);
+		myGenderLyt = (RelativeLayout) findViewById(R.id.myGenderLyt);
+		myGenderLyt.setOnClickListener(this);
+		mSignatureLyt = (RelativeLayout)findViewById(R.id.mySignatureLyt);
+		mSignatureLyt.setOnClickListener(this);
+//		mChangePasswordLyt = (RelativeLayout)findViewById(R.id.changePasswordid);
+//		mChangePasswordLyt.setOnClickListener(this);
+		
+		myHeadImg = (CircularImage) findViewById(R.id.myHeadImg);
+		myNameText = (TextView) findViewById(R.id.myNameText);
+		myGenderText = (TextView) findViewById(R.id.myGenderText);
+		myAccountTextView = (TextView)findViewById(R.id.myAccountText);
+		mySignatureTextView = (TextView)findViewById(R.id.SignagureText);
+		
+		mLogoutLayout = (TextView)findViewById(R.id.exitLogin);
+	}
+	
+	private void displayData() {
+		if(mShowCurrentUser) {
+			myAccountTextView.setText(Utils.getInstance().getUsername(this));
+			mySignatureTextView.setText(Utils.getInstance().getUserSignature(this));		
+			myNameText.setText(Utils.getInstance().getUserDname(this));
+			if(Utils.getInstance().getUserGender(this).equals("female")) {
+				myGenderText.setText(R.string.female);
+			}
+			else {
+				myGenderText.setText(R.string.male);
+			}
+			if(Utils.getInstance().getIconURL(this) != null)
+				Utils.getInstance().imageLoader.displayImage(Utils.getInstance().getIconURL(this), myHeadImg);
+		}
+		else {
+			mLogoutLayout.setVisibility(View.GONE);
+			requestUserData();
+		}
+	}
+	
+	private void requestUserData() {
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUserInfoAPI);
+		if(mSessionID!=null && !mSessionID.equals(""))
+			stb.append("&sessionid="+mSessionID);
+		if(!mShowCurrentUser && mUserName!=null && !mUserName.equals(""))
+			stb.append("&uname="+mUserName);
+	
+		if(Utils.getInstance().mHttpTaskSecondary != null && Utils.getInstance().mHttpTaskSecondary.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTaskSecondary.cancel(true);
+			Utils.getInstance().mHttpTaskSecondary = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_USER_INFO);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTaskSecondary = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_USER_INFO || netData==null)
+					return;
+				
+				if(netData!=null)
+					mUserInfoEntity = (CCVideoUserInfoEntity)netData;
+				
+				updateUI();
+			}
+		});
+		Utils.getInstance().mHttpTaskSecondary.execute(params);
+	}
+	
+	private void updateUI() {
+		ImageView nameArrow = (ImageView)findViewById(R.id.myNameImg);
+		nameArrow.setVisibility(View.GONE);
+		
+		ImageView signatureArrow = (ImageView)findViewById(R.id.mySignatureImg);
+		signatureArrow.setVisibility(View.GONE);
+		
+		myAccountTextView.setText(mUserInfoEntity.mUName);
+		mySignatureTextView.setText(mUserInfoEntity.mSignature);		
+		myNameText.setText(mUserInfoEntity.mUDname);
+		if(mUserInfoEntity.mGender.equals("female")) {
+			myGenderText.setText(R.string.female);
+		}
+		else {
+			myGenderText.setText(R.string.male);
+		}
+		if(Utils.getInstance().getIconURL(this) != null)
+			Utils.getInstance().imageLoader.displayImage(mUserInfoEntity.mLogoURL, myHeadImg);
+		
+	}
+	
+	private void initListeners() {
+		mLogoutLayout.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				askUserLogout();
+			}
+		});
+	}
+	
+	private void askUserLogout() {
+		AlertDialog.Builder alert = new AlertDialog.Builder(this);
+		alert.setTitle(getResources().getString(R.string.pls_choose));
+		alert.setMessage(getResources().getString(R.string.whether_to_logout));
+		
+		alert.setPositiveButton(getResources()
+				.getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+
+					@Override
+					public void onClick(DialogInterface arg0, int arg1) {
+						Intent intent = new Intent(getApplicationContext(), CCVideoSquareActivity.class);
+						intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+						Bundle b = new Bundle();
+						b.putBoolean("is_from_logout", true);
+						intent.putExtras(b);
+						startActivity(intent);
+						
+						Utils.getInstance().removePassword(mainActivity);
+						if (Utils.getInstance().mTencent != null) {
+							Utils.getInstance().mTencent.logout(mainActivity);
+							QQAccessTokenKeeper.clear(mainActivity);
+						}
+						
+						Intent broadcasting = new Intent("CLOSE_ALL");
+						CCVideoPersonalInfoActivity.this.sendBroadcast(broadcasting);
+						Utils.getInstance().setIsLoggedIn(false);
+						
+						finish();
+					}
+		});
+		alert.setNegativeButton(getResources().getString(R.string.cancel_str), 
+				new DialogInterface.OnClickListener() {
+					
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						dialog.dismiss();
+					}
+				});
+		alert.show();
+	}
+	
+	@Override
+	public void onClick(View v) {
+		if(v.getId() == R.id.simple_back) {
+			Intent intent = new Intent();
+			if (mBundle == null){
+				mBundle = new Bundle();
+			}
+			mBundle.putCharSequence("MY_NAME_RESULT", myNameText.getText());
+			mBundle.putCharSequence("MY_SIGNATURE_RESULT", mySignatureTextView.getText());
+			intent.putExtras(mBundle);
+			this.setResult(0, intent);
+        	this.finish();
+        	return;
+		}
+		
+		if(!mShowCurrentUser) {
+			return;
+		}
+		switch (v.getId()) {
+	        case R.id.myHeadLyt: {
+	        	setHead();
+	        	break;
+	        }
+	        
+	        case R.id.myGenderLyt: {
+	        	choiceGender();
+	        	break;
+	        }
+
+			case R.id.myNameLyt: {
+				editName();
+				break;    	
+	        }
+			case R.id.mySignatureLyt: {
+				editSignature();
+				break;
+			}
+	        
+//			case R.id.changePasswordid: {
+//				Intent intent = new Intent(CCVideoPersonalInfoActivity.this, UserPasswordActivity.class);
+//				startActivity(intent);
+//				break;
+//			}
+			default:
+	            break;
+		}
+	}
+	
+	private void setHead(){
+		 String[] items = new String[] { 
+				 this.getResources().getString(R.string.choose_from_album),
+				 this.getResources().getString(R.string.choose_from_camera)}; 
+		 
+		 new AlertDialog.Builder(this)
+			.setTitle(this.getResources().getString(R.string.set_user_icon))
+			.setItems(items, new DialogInterface.OnClickListener(){
+
+				@Override
+				public void onClick(DialogInterface dialog, int which) {
+					// TODO Auto-generated method stub
+					if(which == 0){
+						 Intent intentFromGallery = new Intent();    
+                         intentFromGallery.setType("image/*"); 
+                         intentFromGallery.setAction(Intent.ACTION_GET_CONTENT);  
+                         startActivityForResult(intentFromGallery,IMAGE_REQUEST_CODE);   
+					}else{
+						 Intent intentFromCapture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);  
+                         if (android.os.Environment.getExternalStorageState().equals(  
+                        		    android.os.Environment.MEDIA_MOUNTED)) {    
+                             intentFromCapture.putExtra(MediaStore.EXTRA_OUTPUT,  
+                             Uri.fromFile(new File(Environment.getExternalStorageDirectory(),IMAGE_FILE_NAME)));  
+                         }    
+                         startActivityForResult(intentFromCapture,CAMERA_REQUEST_CODE);
+					}
+				}
+				
+			}).setNegativeButton(this.getResources().getString(R.string.cancel_str), new DialogInterface.OnClickListener() {    
+				   
+                @Override   
+                public void onClick(DialogInterface dialog, int which) {    
+                    dialog.dismiss();    
+                }    
+            }).show();    
+		 
+	}
+	
+	private void editSignature() {
+        View modifyNameView = LayoutInflater.from(this).inflate(R.layout.modify_signature, null); 
+        final EditText editTextName = (EditText) modifyNameView.findViewById(R.id.editName); 
+        editTextName.setText(mySignatureTextView.getText());
+        editTextName.setSelection(mySignatureTextView.length());
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(modifyNameView);
+        dialog.show();
+
+        Button cancel = (Button)modifyNameView.findViewById(R.id.cancel);
+        cancel.setOnClickListener(new OnClickListener(){
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				dialog.dismiss();
+			}
+        	
+        });
+        Button confirm = (Button)modifyNameView.findViewById(R.id.confirm);
+        confirm.setOnClickListener(new OnClickListener(){
+			@Override
+			public void onClick(View arg0) {
+				CCVideoPersonalInfoActivity.this.updateSignature(editTextName.getText().toString());
+				//myNameText.setText(editTextName.getText());
+				dialog.dismiss();
+			}
+        	
+        });
+        		
+	}
+	
+	private void editName(){
+        View modifyNameView = LayoutInflater.from(this).inflate(R.layout.modify_name, null); 
+        final EditText editTextName = (EditText) modifyNameView.findViewById(R.id.editName); 
+        editTextName.setText(myNameText.getText());
+        editTextName.setSelection(myNameText.length());
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(modifyNameView);
+        dialog.show();
+
+        Button cancel = (Button)modifyNameView.findViewById(R.id.cancel);
+        cancel.setOnClickListener(new OnClickListener(){
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				dialog.dismiss();
+			}
+        	
+        });
+        Button confirm = (Button)modifyNameView.findViewById(R.id.confirm);
+        confirm.setOnClickListener(new OnClickListener(){
+			@Override
+			public void onClick(View arg0) {
+				CCVideoPersonalInfoActivity.this.updateName(editTextName.getText().toString());
+				//myNameText.setText(editTextName.getText());
+				dialog.dismiss();
+			}
+        	
+        });
+        
+        
+	}
+	
+	private void updateSignature(String signature) {
+		/*
+		if(signature==null || signature.equals("")) {
+			Toast.makeText(this, R.string.empty_signature_failure, Toast.LENGTH_LONG).show();
+		}
+		*/
+		
+		mNewSignature = signature;
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUserEditInfoAPI);
+		stb.append("&sessionid="+Utils.getInstance().getSessionID(this));
+		stb.append("&signature="+URLEncoder.encode(mNewSignature));
+	
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_EDIT_USER_INFO);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_EDIT_USER_INFO || netData==null)
+					return;
+				
+				if(netData!=null)
+					mEntity = (CCVideoUserEditInfoEntity)netData;
+				
+				updateSignature();
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void updateName(String newName) {
+		if(newName==null || newName.equals("")) {
+			Toast.makeText(this, R.string.empty_name_failure, Toast.LENGTH_LONG).show();
+		}
+		
+		mNewDisplayName = newName;
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUserEditInfoAPI);
+		stb.append("&sessionid="+Utils.getInstance().getSessionID(this));
+		stb.append("&displayname="+URLEncoder.encode(mNewDisplayName));
+	
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_EDIT_USER_INFO);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_EDIT_USER_INFO || netData==null)
+					return;
+				
+				if(netData!=null)
+					mEntity = (CCVideoUserEditInfoEntity)netData;
+				
+				updateDisplayName();
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void updateSignature() {
+		mySignatureTextView.setText(mNewSignature);
+		mySignatureTextView.invalidate();
+		Utils.getInstance().setUserSignature(this, mNewSignature);
+		Toast.makeText(this, R.string.update_signature_succ_str, Toast.LENGTH_LONG).show();
+	}
+	
+	private void updateDisplayName() {
+		myNameText.setText(mNewDisplayName);
+		myNameText.invalidate();
+		Utils.getInstance().setUserDname(this, mNewDisplayName);
+		Toast.makeText(this, R.string.update_display_name_succ_str, Toast.LENGTH_LONG).show();
+	}
+	
+	private void choiceGender(){
+		final String[] items = {getString(R.string.male),getString(R.string.female)};
+		
+		new AlertDialog.Builder(this)
+			.setTitle(getResources().getString(R.string.choose_gender))
+			.setItems(items, new DialogInterface.OnClickListener(){
+
+				@Override
+				public void onClick(DialogInterface dialog, int which) {
+					if(which == 1){
+						CCVideoPersonalInfoActivity.this.updateGender("female");
+						//myGenderText.setText(R.string.female);
+					}else{
+
+						CCVideoPersonalInfoActivity.this.updateGender("male");
+						//myGenderText.setText(R.string.male);
+					}
+					
+				}
+				
+			}).show();
+	}
+	
+	private void updateGender(String newGender) {
+		mNewGender = newGender;
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUserEditInfoAPI);
+		stb.append("&sessionid="+Utils.getInstance().getSessionID(this));
+		stb.append("&gender="+newGender);
+	
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_EDIT_USER_INFO);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_EDIT_USER_INFO || netData==null)
+					return;
+				
+				if(netData!=null)
+					mEntity = (CCVideoUserEditInfoEntity)netData;
+				
+				updateGenderUI();
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+		return;
+	}
+	
+	private void updateGenderUI()
+	{
+		if(mNewGender.equals("male")) {
+			myGenderText.setText(R.string.male);
+		}
+		else {
+			myGenderText.setText(R.string.female);
+		}
+		myGenderText.invalidate();
+		Utils.getInstance().setUserGender(this, mNewGender);
+		Toast.makeText(this, R.string.update_gender_succ_str, Toast.LENGTH_LONG).show();
+	}
+	
+	 @Override  
+	 protected void onActivityResult(int requestCode, int resultCode, Intent data) {  
+        if (resultCode != RESULT_CANCELED) {  
+            switch (requestCode) {  
+            case IMAGE_REQUEST_CODE:  
+                startPhotoZoom(data.getData());  
+                break;  
+            case CAMERA_REQUEST_CODE:  
+                if (android.os.Environment.getExternalStorageState().equals(  
+                	    android.os.Environment.MEDIA_MOUNTED)) {  
+                    File tempFile = new File(Environment.getExternalStorageDirectory(),IMAGE_FILE_NAME);  
+                    startPhotoZoom(Uri.fromFile(tempFile));  
+                } else {  
+                    Toast.makeText(this, getResources().getString(R.string.alert_no_sd_card), Toast.LENGTH_LONG).show();
+                }  
+  
+                break;  
+            case RESULT_REQUEST_CODE:  
+                if (data != null) {  
+                    setImageToView(data);  
+                }  
+                break;  
+            }  
+        }  
+        super.onActivityResult(requestCode, resultCode, data);  
+    }  
+	 
+	 public void startPhotoZoom(Uri uri) {    
+         if(uri !=null ){  
+	         Intent intent = new Intent("com.android.camera.action.CROP");    
+	         intent.setDataAndType(uri, "image/*");    
+	         intent.putExtra("crop", "true");    
+	         intent.putExtra("aspectX", 1);    
+	         intent.putExtra("aspectY", 1);        
+	         intent.putExtra("outputX", 240);    
+	         intent.putExtra("outputY", 240);    
+	         intent.putExtra("return-data", true);    
+	         startActivityForResult(intent, RESULT_REQUEST_CODE);    
+         }
+     }    
+  
+     private void setImageToView(Intent data) {  
+    	 mBundle = data.getExtras();    
+         if (mBundle != null) {    
+             Bitmap photo = mBundle.getParcelable("data"); 
+             if(Utils.getInstance().saveUserIcon(photo, Utils.getInstance().getSaveUserIconPath())) {
+            	 uploadUserIcon();
+//            	 if(uploadUserIcon()) {
+//	            	 if(photo != null){
+//	    	             Drawable drawable = new BitmapDrawable(photo);    
+//	    	             myHeadImg.setBackgroundDrawable(drawable);  
+//	                 }
+//            	 }
+             }
+             else  {
+            	 Toast.makeText(this, R.string.save_icon_failed, Toast.LENGTH_LONG).show();
+             }
+         }    
+     }    
+     
+     private class UploadUserIconAsyncTask extends AsyncTask<String, Void, String> {
+    	 private String mURL;
+    	 private String mPath;
+    	 private String mFilename;
+    	 private String mLogoURL = null;
+    	 
+    	 public UploadUserIconAsyncTask(String url, String path, String filename) {
+    		 super();
+    		 mURL = url;
+    		 mPath = path;
+    		 mFilename = filename;
+    	 }
+    	 
+		@Override
+		protected String doInBackground(String... arg0) {
+			String serverResponse = (Net.uploadFile(mURL, mPath, mFilename));
+			try {
+				JSONObject jsonObject = new JSONObject(serverResponse);
+				if(jsonObject.has("retval") && !jsonObject.isNull("retval") && jsonObject.getString("retval").equals("ok")) {
+					if(jsonObject.has("retinfo") && !jsonObject.isNull("retinfo")) {
+						JSONObject retinfoObject = jsonObject.getJSONObject("retinfo");
+						
+						if(retinfoObject.has("logourl") && !retinfoObject.isNull("logourl")) {
+							mLogoURL = retinfoObject.getString("logourl");
+						}
+					}
+				}
+			} catch(Exception e) {
+				e.printStackTrace();
+			}
+			return serverResponse;
+		}
+		
+        @Override
+        protected void onPostExecute(String result) {
+        	CCVideoPersonalInfoActivity.this.uploadSucc(mLogoURL);
+        }
+     }
+     
+     private void uploadSucc(String logoURL) {
+    	 Utils.getInstance().setIconURL(this, logoURL);
+    	 if(Utils.getInstance().getIconURL(this) != null) {
+    		 Utils.getInstance().imageLoader.displayImage(Utils.getInstance().getIconURL(this), myHeadImg);
+    	 }
+     }
+     
+     private boolean uploadUserIcon() {
+    	 boolean ret = false;
+    	 try {
+ 			StringBuilder stb = new StringBuilder("");
+ 			stb.append(Constants.kServiceURL);
+ 			stb.append(Constants.kUploadUserIconAPI);
+    		 UploadUserIconAsyncTask task = new UploadUserIconAsyncTask(stb.toString(), 
+    				 Utils.getInstance().getSaveUserIconPath(), 
+    				 Utils.getInstance().getUsername(this)+".jpg");
+    		 
+    		 task.execute("");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+    	 return ret;
+     }
+     
+     private String getLBSInfo(){
+    	String res = "";
+ 		LocationManager locationManager = (LocationManager)getSystemService(Context.LOCATION_SERVICE);
+ 		if(locationManager!=null){
+ 			try{
+ 				Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+ 				if(location != null){
+ 					res = Double.toString(location.getLatitude())+"_"+Double.toString(location.getLongitude());
+ 				}
+ 			}catch(Exception e){
+ 				e.printStackTrace();
+ 			}
+ 		}
+ 		if("".equals(res)){
+ 			LocationManager location_manager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+ 			if(location_manager!=null){
+ 				try{
+ 					Location location = location_manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+ 					if(location != null){
+ 						res = Double.toString(location.getLatitude())+"_"+Double.toString(location.getLongitude());
+ 					}
+ 				}catch(Exception e){
+ 					e.printStackTrace();
+ 				}
+ 			}
+ 		}
+ 		return res;
+     }
+   
+
+	
+	
+}

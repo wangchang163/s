@@ -1,0 +1,2583 @@
+package com.oupai.activity;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import com.ccvideo.R;
+
+import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.ImageFormat;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
+import android.graphics.Bitmap.Config;
+import android.hardware.Camera;
+import android.hardware.Camera.AutoFocusCallback;
+import android.hardware.Camera.CameraInfo;
+import android.hardware.Camera.Parameters;
+import android.hardware.Camera.PreviewCallback;
+import android.hardware.Camera.Size;
+import android.location.Location;
+import android.location.LocationManager;
+import android.media.AudioManager;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
+import android.os.PowerManager;
+import android.provider.MediaStore;
+import android.support.v4.app.FragmentActivity;
+import android.text.SpannableString;
+import android.text.TextPaint;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import android.view.Gravity;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.View;
+import android.view.ViewTreeObserver;
+import android.view.Window;
+import android.view.View.OnClickListener;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.ViewFlipper;
+
+import com.oupai.asynctasks.AsyncDownloadTask;
+import com.oupai.dialog.CCVideoShareDialog;
+import com.oupai.entity.MessageEntity;
+import com.oupai.misc.AppSysEnv;
+import com.oupai.misc.Constants;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.Net;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.oupai.renderer.CCVideoLiveRenderer;
+import com.oupai.runnables.AudioRecordRunnable;
+import com.oupai.runnables.VideoRecordRunnable;
+import com.tencent.mm.sdk.modelmsg.SendMessageToWX;
+import com.tencent.mm.sdk.modelmsg.WXMediaMessage;
+import com.tencent.mm.sdk.modelmsg.WXWebpageObject;
+import com.tencent.mm.sdk.openapi.IWXAPI;
+import com.tencent.mm.sdk.openapi.WXAPIFactory;
+import com.umeng.analytics.MobclickAgent;
+import com.appbase.JNIApi;
+import com.cloudfocus.opplayer.OPPlayerActivity;
+import com.cloudfocus.opplayer.flymq.FlymqRunner;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+import com.cloudfocus.opplayer.misc.BaseType;
+import com.gitonway.lee.niftynotification.lib.Configuration;
+import com.gitonway.lee.niftynotification.lib.Effects;
+import com.gitonway.lee.niftynotification.lib.NiftyNotificationView;
+//import com.oupai.view.CCVideoGLSurfaceView;
+import com.oupai.view.NotificationBarToast;
+import com.oupai.view.chatface.FaceConversionUtil;
+import com.oupai.view.snackbar.Snackbar;
+import com.media.RunnableImageView;
+import com.oupai.entity.CCVideoCheckLiveStatusEntity;
+import com.oupai.entity.CCVideoStartLiveEntity;
+import com.oupai.fragment.ActionSheet;
+import com.oupai.fragment.ActionSheet.ActionSheetListener;
+import com.oupai.http.HTTPAppDevStopLiveDaemon;
+import com.oupai.http.HTTPGetChattingMessageWithLivingHeartBTDaemon;
+import com.oupai.http.HTTPSubmitLivingTitleDaemon;
+
+@TargetApi(Build.VERSION_CODES.GINGERBREAD)
+public class OupaiLivingActivity extends FragmentActivity implements ActionSheetListener {
+	private final static String TAG = "OupaiLivingActivity";
+	
+	public static final int HTTP_LOADING_IMAGE_DONE = 0x612;
+	public static final int UPDATE_LIVING_TIME = 0x1012;
+
+	private static final int HIDDEN_LIVING_TIPS_VIEW   = 0x1000;
+	private static final int HIDDEN_SHARE_TIPS_VIEW    = 0x1001;
+	private static final int SHOW_SHARE_TIPS_VIEW      = 0x1002;
+	
+	private static final String VIEW_CAMERA = "view_camera";
+	private static final String VIEW_COVER = "view_cover";
+	
+	private static  final int FOCUS_AREA_SIZE = 300;
+	
+	private Activity mainActivity = null;
+	
+	private String mCameraID = null;
+	private boolean mServiceInited = false;
+	public String mLiveName = null;
+	private String mUserName = null;
+	private String mUserDname = null;
+	//private TextView mLiveNameTextView = null;
+	private TextView mLiveRecordTime = null;
+	
+	private PowerManager.WakeLock mWakeLock;
+	
+	//private View mFragmentView = null;
+	private Camera mCamera = null;
+	private Camera mCameraDevice = null;
+	private int previewWidth=1280, previewHeight=720;
+	private int screenWidth=480, screenHeight=480;
+	private int encodeWidth=-1, encodeHeight=-1;
+	public boolean needResize = false;
+	private byte[] tempResizeBuf;
+	//private int defaultCameraId = -1, cameraSelection = 0, defaultScreenResolution = -1;
+	private int defaultScreenResolution = -1;
+	private boolean isPreviewOn = false;
+	private int recorderStatus = Constants.kCameraIdle;
+	
+	private RelativeLayout topLayout = null;
+	private CameraView mCameraView = null;
+	private SurfaceView camView = null;
+	private View mCoverView = null;
+	private Parameters mCameraParameters = null;
+	private LinearLayout cameraControl = null;
+	
+	private LayoutInflater layoutInflater = null;
+	private LinearLayout msgLayout = null;
+	//private HTTPGetChattingMessageDaemon fetchMessageDaemon = null;
+	
+	//private HTTPSubmitChattingMessageDaemon submitMessageDaemon = null;
+	private HTTPGetChattingMessageWithLivingHeartBTDaemon chattingMessageWithHeartBT = null;
+	
+	private Handler httpHandler =  null;
+	private LinearLayout navigationBar = null;
+	
+	//private LinearLayout mLiveStatusLayout = null;
+	//private LinearLayout mControlLayout = null;
+	//private RelativeLayout mRecordTimerLayout = null;
+	private ImageView editLiveName = null;
+	private ImageView mFlashlightBtn = null;
+	
+	private AudioManager mAudioManager = null;
+	
+	private int mCameraSelection = CameraInfo.CAMERA_FACING_BACK;
+	private int mDefaultCameraID = -1;
+	private boolean bMuted = false;
+	
+	// UI components
+	//private Button mRecordButton = null;
+	//private Button mMuteButton = null;
+	//private Button mCaptureButton = null;
+	//private Button mShareWeixinButton = null;
+	//private CCVideoSwitch mShareSwitch = null;
+	//private int shareOption = 0;
+	
+	private int frameRate = 10;
+//	private int bitRate = 128*1024;
+	
+	private ViewFlipper flipperView = null;
+
+	private AudioRecordRunnable mAudioRecordRunnable;
+	//private Thread mAudioThread = null;
+	private final int[] mAudioRecordLock = new int[0];
+	volatile boolean mRunAudioThread = false;
+	private volatile long mAudioTimestamp = 0L;
+	
+	private VideoRecordRunnable mVideoRecordRunnable;
+	//private Thread mVideoThread = null;
+	private final int[] mVideoRecordLock = new int[0];
+	volatile boolean mRunVideoThread = false;
+	private volatile long mVideoTimestamp = 0L;
+	private boolean isNowMute = false;
+	
+	private ImageView closeLive;
+	private TextView mTitleView;
+	
+	private ImageView muteBtn;
+	
+	//private TimerRunnable mTimerRunnable;
+	//private Thread mTimerThread = null;
+	//private boolean mRunTimerThread = false;
+	//private String mTimerContent = null;
+	//private Handler mTimerHandler = null;
+	
+	//private SnapshotRunnable mSnapshotRunnable = null;
+	//private Handler mSnapshotHandler = null;
+	
+	private Timer mUpdateLivingTimeTimer = null;
+	private int livingTime = 0;
+	private boolean isLiving = false;
+	private boolean timerPaused = false;
+	
+	private CCVideoStartLiveEntity mStartLiveEntity = null;
+	private boolean mIsShareToPublic = true;
+	private IWXAPI wxAPI;
+	private ProgressDialog mProgressDialog = null;
+	
+	public String snapshotPath = null;
+	private boolean isSavedSnapshot = false;
+	private int mFramesGone = 0;
+	
+
+	private View mShareButton = null;
+	
+	private CCVideoShareDialog mShareDialog = null;
+	//private RelativeLayout mShareLayout = null;
+	
+	//private RelativeLayout mControlBtnsLayout = null;
+	//private RelativeLayout mRecordBtnLayout = null;
+	//private ImageView mRecordBtnRing = null;
+	
+	private float mTranslateX = 0.f;
+	
+	private ProgressBar mNetworkQualityBar = null;
+	private String mCheckLiveStatusURL = null;
+	
+	private TextView mWatchPeopleCount = null;
+	private TextView mLiveQuality = null;
+
+	//private boolean isShowWarning = false;
+	//private Timer showWarningTimer = null;
+	
+	private boolean              isShowLivingTips                  = true;
+	private Timer                showLivingTipsTimer               = null;
+	private static final int     SHOW_LIVING_TIPS_DURATION         = 5000;
+	
+	private boolean              isShowShareTips                   = false;
+	private Timer                showShareTipsTimer                = null;
+	private Timer                hiddenShareTipsTimer              = null;
+	private static final int     SHOW_SHARE_TIPS_TIMER_DELAY       = 6000;   // ms
+	private static final int     SHOW_SHARE_TIPS_DURATION          = 3000;   // ms
+	
+	private Snackbar mSnackbar;
+	
+	private String mUploadImageURL = null;
+	
+	private boolean mIsFetchingComments = false;
+	
+	private int mCameraViewOffset = 0;
+	
+	private int mAccumulatedBrokenTime = 0;
+	private boolean mBrokenShown = false;
+	
+//	private CCVideoGLSurfaceView mGLSurfaceView = null;
+//	private CCVideoLiveRenderer mGLLiveRenderer = null;
+//	private boolean bSurfaceCreated = false;
+//	private boolean hasWritten = false;
+//	
+	private int mNavigationHeight = 0;
+	private int mCameraHeight = 0;
+	
+	private int mVideoStatus = Constants.kVideoStatusPreparing;
+	
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		requestWindowFeature(Window.FEATURE_NO_TITLE);
+		//getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, 
+		//		WindowManager.LayoutParams.FLAG_FULLSCREEN);
+		getWindow().setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, 
+				WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); 
+		
+		mainActivity = this;
+		
+		layoutInflater = this.getLayoutInflater();
+				
+		setContentView(R.layout.activity_oupai_living_layout);
+
+		initViews();
+		initSnapshotPath();
+		//initSnapshotModule();
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+		if (AppSysEnv.getLivingTipsFlag(OupaiLivingActivity.this)) {
+			Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+		    stopShowLivingTips();
+		}
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+		
+		mAudioManager = (AudioManager)getSystemService(Context.AUDIO_SERVICE);
+		
+//		appDevPlayLiving(); //initCameraID();
+
+		PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE); 
+		mWakeLock = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, TAG); 
+		mWakeLock.acquire(); 
+
+		wxAPI = WXAPIFactory.createWXAPI(this, Constants.WX_APP_ID);
+		
+		mLiveName = Utils.getInstance().getDefaultRoomTitle();
+		
+		mTranslateX = Utils.getInstance().mScreenWidth*0.2f;
+		
+		if(Utils.getInstance().mShowNeedUpdate) {
+			showAlertHasUpdate();
+			Utils.getInstance().mShowNeedUpdate = false;
+		}
+		
+		isShowLivingTips = true;
+		
+		setTheme(R.style.ActionSheetStyleIOS7);
+	}
+	
+	@Override
+	public void onResume() {
+		AppSysTool.LogDebug("onResume "+this);
+		super.onResume();
+		
+		initGLSurfaces();
+		
+		initCameraLayout();
+		
+		initUIParams();
+
+		if(mServiceInited) {
+			this.startLivingDaemon();
+			this.showResumeNotification();
+			
+			this.mVideoStatus = Constants.kVideoStatusLive;
+			this.updateVideoStatus(this.mVideoStatus);
+			
+			timerPaused = false;
+		}
+		
+		if(chattingMessageWithHeartBT != null) {
+			chattingMessageWithHeartBT.isPause = false;
+		}
+		
+		startShowLivingTips();
+
+		if (mWakeLock == null) {
+			PowerManager pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
+			mWakeLock = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, TAG);
+			mWakeLock.acquire();
+		}
+		//MobclickAgent.onPageStart("LiveFragment");
+		if(mSnackbar.mShouldAutomaticallyShow) {
+			mSnackbar.show(OupaiLivingActivity.this);
+			mSnackbar.mShouldAutomaticallyShow = false;
+		}
+	}
+	
+	private void initUIParams() {
+		ViewTreeObserver vto = navigationBar.getViewTreeObserver();
+		vto.addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+		    public boolean onPreDraw() {
+		        navigationBar.getViewTreeObserver().removeOnPreDrawListener(this);
+		        mNavigationHeight = navigationBar.getMeasuredHeight();
+		        return true;
+		    }
+		});
+	}
+	
+	private void showResumeNotification() {
+		Configuration cfg = new Configuration.Builder()
+		.setAnimDuration(700)
+		.setDispalyDuration(2000)
+		.setBackgroundColor("#BB000000")
+		.setTextColor("#ffffff")
+		.setTextPadding(5)
+		.setViewHeight(48)
+		.setTextLines(1)
+		.setTextGravity(Gravity.CENTER)
+		.build();
+	
+		Utils.getInstance().showNiftyNotificationView(
+				this,
+				(CharSequence)(getResources().getString(R.string.anchor_welcome_back)), 
+				Effects.flip,
+				(int)(mNavigationHeight+mCameraHeight-48*2),
+				R.layout.notification_layout, cfg);
+	}
+	
+	public void pauseCamera() {
+		releaseCamera();
+		stopLivingDaemon();
+		clearTopLayout();		
+	}
+	
+	private void initGLSurfaces() {
+		// Init audio encoder
+		if (mAudioRecordRunnable == null) {
+			mAudioRecordRunnable = new AudioRecordRunnable(this);
+		}
+		
+		if (mVideoRecordRunnable == null) {
+			mVideoRecordRunnable = new VideoRecordRunnable(this);
+			//mVideoThread = new Thread(mVideoRecordRunnable);
+			encodeWidth = mVideoRecordRunnable.videoWidth;
+			encodeHeight = mVideoRecordRunnable.videoHeight;
+		}
+
+		DisplayMetrics displaymetrics = new DisplayMetrics();
+		getWindowManager().getDefaultDisplay().getMetrics(displaymetrics);
+
+		screenWidth = displaymetrics.widthPixels;
+		screenHeight = displaymetrics.heightPixels;
+
+//		initRenderSurface();
+	}
+	
+	private void destroyGLSurfaces() {
+		
+	}
+	
+	@Override
+	public void onPause()
+	{
+		AppSysTool.LogDebug("onPause "+this);
+		super.onPause();
+		
+		destroyGLSurfaces();
+		//this.stopShowWarning();
+		stopShowLivingTips();
+		
+		if(chattingMessageWithHeartBT != null)
+			chattingMessageWithHeartBT.isPause = true;
+
+		this.pauseCamera();
+		
+		if (mWakeLock != null) {
+			mWakeLock.release();
+			mWakeLock = null;
+		}
+		
+		if(mProgressDialog != null) {
+			mProgressDialog.dismiss();
+			mProgressDialog = null;
+		}
+		
+		if(recorderStatus==Constants.kCameraRecording) {
+			Utils.getInstance().mNeedResumeBroadcasting = true;
+			
+			if(mVideoStatus == Constants.kVideoStatusSharing) {
+				this.updateVideoStatus(Constants.kVideoStatusSharing);
+			}
+			else {
+				mVideoStatus = Constants.kVideoStatusBackground;
+				this.updateVideoStatus(Constants.kVideoStatusBackground);
+			}
+		}
+		else {
+			Utils.getInstance().mNeedResumeBroadcasting = false;
+		}
+		
+		timerPaused = true;
+		
+		MobclickAgent.onPageEnd("LiveFragment");
+	}
+	
+	private void showSessionInvalidAlert() {
+		AlertDialog.Builder alert = new AlertDialog.Builder(mainActivity);
+		alert.setTitle(getResources().getString(R.string.error_alert_title));
+		alert.setMessage(getResources().getString(R.string.session_invalid_msg));
+		
+		alert.setPositiveButton(getResources().getString(R.string.confirm_str), new DialogInterface.OnClickListener() {
+			
+			@Override
+			public void onClick(DialogInterface arg0, int arg1) {
+				mainActivity.finish();
+			}
+		});
+	}
+	
+	private void showAlertHasUpdate() {
+		AlertDialog.Builder alert = new AlertDialog.Builder(mainActivity);
+		alert.setTitle(getResources().getString(
+				R.string.update_app_str));
+		alert.setMessage(R.string.has_update_str);
+		
+		alert.setPositiveButton(getResources()
+				.getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						new AsyncDownloadTask(mainActivity,
+								Utils.getInstance().mUpdateEntity.mUpdateURL,
+								new AsyncDownloadTask.CallBack() {
+									@Override
+									public void callback() {
+										OupaiLivingActivity.this.downloadNewAPK();
+									}
+								}).execute(Utils.getInstance().mUpdateEntity.mUpdateURL);
+
+					}
+				});
+		
+		alert.setNegativeButton(getResources().getString(R.string.cancel_str), new DialogInterface.OnClickListener() {
+			
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				dialog.dismiss();
+				
+			}
+		});
+		
+		alert.show();
+	}
+	
+	private void downloadNewAPK() {
+		final String generateFileName = "/download.apk";
+		Intent intent = new Intent(Intent.ACTION_VIEW);
+		intent.setDataAndType(Uri.fromFile(new File(
+				Utils.getInstance().mAppExternalStoragePath
+						+ generateFileName)), Constants.kAppMimeType);
+		startActivity(intent);
+	}
+	
+	private void clearTopLayout() {
+		if(topLayout != null && topLayout.getChildCount() > 0) {
+			topLayout.removeAllViews();
+		}
+//		for(int i=0; i<topLayout.getChildCount(); i++) {
+//			View view = topLayout.getChildAt(i);
+//			if(view == mGLSurfaceView) {
+//				continue;
+//			}
+//			else  {
+//				topLayout.removeViewAt(i);
+//			}
+//		}
+	}
+	
+	private void initUpdateLivingTimeTimer () {
+		mUpdateLivingTimeTimer = new Timer(true);
+		
+		mUpdateLivingTimeTimer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				Message msg = new Message();
+				msg.what = UPDATE_LIVING_TIME;
+				httpHandler.sendMessage(msg);
+			}
+		}, 1000, 1000);
+	}
+	
+	private void checkBrokenLines() {
+		
+		if(timerPaused == false) {
+			if(JNIApi.flymqProducerDropRate() < 5) {
+				mAccumulatedBrokenTime ++;
+			}
+			else {
+				mAccumulatedBrokenTime = 0;
+			}
+			
+			if(mAccumulatedBrokenTime > 20 && mBrokenShown==false) {
+				createLivingBrokenDlg(R.string.living_broken_bad_connection_text);
+				mBrokenShown = true;
+			}
+		}
+	}
+	
+	private void updateLivingTime()
+	{
+		if (isLiving == false) {
+			return;
+		}
+		TextView time = (TextView) this.findViewById(R.id.oupai_living_time_id);
+		livingTime ++;
+
+		if (livingTime == 2) {
+			isSavedSnapshot = true;
+		}
+			
+		time.setText(BaseType.sec2strtime(this.livingTime));
+	}
+	
+	private void sendHeartbeat() {
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kLiveHeartbeatAPI);
+		stb.append("devid="+this.mCameraID);
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_LIVE_HEARTBEAT);
+		params.setActionUrl(stb.toString());
+		
+		Utils.getInstance().mHttpTask = new HttpTask(mainActivity, new HttpCallbackInterface() {
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam, Object netData) {
+				
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+
+	private void releaseCamera() {
+		
+		if (mCameraView != null) {
+			mCameraView.stopPreview();
+			mCameraView.getHolder().removeCallback(mCameraView);
+			if(mCameraDevice != null){
+				mCameraDevice.setPreviewCallback(null);
+				mCameraDevice.release();
+			}
+			mCameraDevice = null;
+		}
+		
+		mCamera = null;
+		mCameraView = null;
+	}
+
+	@Override
+	public void onDestroy() {
+		AppSysTool.LogDebug("onDestroy "+this);
+		super.onDestroy();
+
+		appDevStopLiving();
+		
+		if(Utils.getInstance().mHttpTask != null)
+			Utils.getInstance().mHttpTask.cancel(true);
+		
+		if (mWakeLock != null) {
+			mWakeLock.release();
+			mWakeLock = null;
+		}
+		mSnackbar.destroyInstance();
+		mSnackbar = null;
+	}
+	
+	private void appDevStopLiving()
+	{
+		if (this.chattingMessageWithHeartBT != null) {
+			this.chattingMessageWithHeartBT.stopRunning();
+			chattingMessageWithHeartBT = null;
+		}
+		
+		if(mUpdateLivingTimeTimer != null) {
+			mUpdateLivingTimeTimer.cancel();
+			mUpdateLivingTimeTimer = null;
+		}
+		
+		AppSysTool.LogDebug("Close producer");
+		
+		JNIApi.flymqProducerClose();
+	}
+	
+	private boolean appDevPlayLiving()
+	{
+		mStartLiveEntity = Utils.getInstance().getStartLiveEntity(mainActivity);
+//		NotificationBarToast.makeText(this, R.string.anchor_preparing, NotificationBarToast.LENGTH_LONG).NotifacationBarShow();
+		
+		Configuration cfg = new Configuration.Builder()
+			.setAnimDuration(700)
+			.setDispalyDuration(Integer.MAX_VALUE)
+			.setBackgroundColor("#BB000000")
+			.setTextColor("#ffffff")
+			.setTextPadding(5)
+			.setViewHeight(48)
+			.setTextLines(1)
+			.setTextGravity(Gravity.CENTER)
+			.build();
+		
+		Utils.getInstance().showNiftyNotificationView(
+				this,
+				(CharSequence)(getResources().getString(R.string.anchor_preparing)), 
+				Effects.flip,
+				mNavigationHeight,
+				R.layout.notification_layout, cfg);
+		
+		mCameraID = mStartLiveEntity.mDevID;
+		{ 
+			String uname = Utils.getInstance().getUsername(mainActivity);
+			String sessionID = Utils.getInstance().getSessionID(mainActivity);
+			
+			StringBuilder stb = new StringBuilder("");
+			stb.append(Constants.kServiceURL);
+			stb.append(Constants.kStartLiveAPI);
+			stb.append("uname="+uname+"&sessionid="+sessionID+"&device="+Constants.kDeviceType);
+			
+			LocationManager manager  = (LocationManager)mainActivity.getSystemService(Context.LOCATION_SERVICE);
+			if (manager != null) {
+				try {
+				Location location = manager.getLastKnownLocation(Utils.getInstance().getLastLocationProvider(mainActivity));
+				AppSysTool.LogDebug("Get Location is "+location);
+				if (location != null) {
+					stb.append("&gps_info=1"+
+							"&gps_accuracy="+location.getAccuracy()+
+							"&gps_altitude="+location.getAltitude()+
+							"&gps_bearing="+location.getBearing()+
+							"&gps_speed="+location.getSpeed()+
+							"&gps_latitude="+location.getLatitude()+
+							"&gps_longitude="+location.getLongitude());
+				} else {
+					stb.append("&gps_info=0");
+				}
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+			if(mSnackbar.isCustomThumb) {
+				stb.append("&thumb=1");
+			}
+			else {
+				stb.append("&thumb=0");
+			}
+			
+			stb.append("&title="+URLEncoder.encode(mLiveName));
+			
+			stb.append("&permission="+mSnackbar.privacyLevel);
+			
+			if(false) {
+				stb.append("&video=1");
+			}
+			else {
+				stb.append("&video=0");
+			}
+			
+			switch(mSnackbar.qualityLevel) {
+			case 0:
+				stb.append("&quality=superb");
+				break;
+			case 1:
+				stb.append("&quality=high");
+				break;
+			case 2:
+				stb.append("&quality=standard");
+				break;
+			case 3:
+				stb.append("&quality=normal");
+				break;
+			default:
+				break;
+			}
+			
+			if(mCameraID != null) {
+				stb.append("&devid="+mCameraID);
+			}
+
+			HttpParams params = new HttpParams();
+			params.setActionId(HttpActionID.ACTION_ID_START_LIVE);
+			params.setActionUrl(stb.toString());
+			
+			if(mProgressDialog != null) {
+				mProgressDialog.dismiss();
+				mProgressDialog = null;
+			}
+			mProgressDialog = ProgressDialog.show(mainActivity, getResources().getString(R.string.init_live_str), getResources().getString(R.string.pls_wait_str));
+			
+			Utils.getInstance().mHttpTask = new HttpTask(mainActivity, new HttpCallbackInterface() {
+				@Override
+				public void callBack(int resultCode, int actionId, String actionParam, Object netData) {
+					if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+						Utils.getInstance().networkFailed(mProgressDialog);
+						return;
+					}
+					AppSysTool.LogDebug("Try to call back for http task "+actionId+" "+netData);
+					
+					if(actionId != HttpActionID.ACTION_ID_START_LIVE || netData==null) {
+						return;
+					}
+					
+					Utils.getInstance().hideNiftyNotificationView();
+					
+					mStartLiveEntity = (CCVideoStartLiveEntity)netData;
+					
+					if(!checkValidSession()) {
+						showSessionInvalidAlert();
+					}
+					
+					updateFlymqAttributes(netData, actionParam);
+					uploadCustomThumb();
+				}
+			});
+			Utils.getInstance().mHttpTask.execute(params);
+		}
+		
+		mUserName = Utils.getInstance().getUsername(mainActivity);
+		mUserDname = Utils.getInstance().getUserDname(mainActivity);
+		
+		//Utils.getInstance().get
+		//mLiveNameTextView.setText(mLiveName);
+		mServiceInited = true;
+		
+		mVideoStatus = Constants.kVideoStatusLive;
+		
+		return true;
+	}
+	
+	private boolean checkValidSession() {
+		if(!mStartLiveEntity.mRetVal.equalsIgnoreCase("ok")) {
+			return false;
+		}
+		
+		return true;
+	}
+	
+    private class UploadVideoThumbAsyncTask extends AsyncTask<String, Void, String> {
+   	 private String mURL;
+   	 private String mPath;
+   	 private String mFilename;
+   	 private String mLogoURL = null;
+   	 
+   	 public UploadVideoThumbAsyncTask(String url, String path, String filename) {
+   		 super();
+   		 mURL = url;
+   		 mPath = path;
+   		 mFilename = filename;
+   	 }
+   	 
+		@Override
+		protected String doInBackground(String... arg0) {
+			String serverResponse = (Net.uploadFile(mURL, mPath, mFilename));
+			try {
+
+			} catch(Exception e) {
+				e.printStackTrace();
+			}
+			return serverResponse;
+		}
+		
+       @Override
+       protected void onPostExecute(String result) {
+       	OupaiLivingActivity.this.uploadSucc(mLogoURL);
+       }
+    }
+    
+    private void uploadSucc(String logoURL) {
+    }
+	
+	
+	private void uploadCustomThumb()  {
+		if(mSnackbar.isCustomThumb == false)
+			return;
+		
+		boolean ret = false;
+		try {
+			StringBuilder stb = new StringBuilder("");
+			stb.append(mStartLiveEntity.mUploadThumbURL);
+			UploadVideoThumbAsyncTask task = new UploadVideoThumbAsyncTask(stb.toString(), 
+					Environment.getExternalStorageDirectory()+File.separator+Constants.kVideoThumbFilename, 
+					mStartLiveEntity.mLinkID+".jpg");
+			 
+			task.execute("");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return;
+	}
+	
+	private void initSnapshotPath() {
+		String filename = Utils.getInstance().getDateAsJPEGFilename();
+		snapshotPath = Utils.getInstance().mAppExternalStoragePath + filename;
+	}
+	
+	private void cameraInitError() {
+		
+	}
+	
+	public int getPreviewWidth() {
+		return previewWidth;
+	}
+	
+	public int getPreviewHeight() {
+		return previewHeight;
+	}
+	
+	public int getVideoFrameRate() {
+		return frameRate;
+	}
+	
+	public int getVideoBitRate() {
+		switch(mSnackbar.qualityLevel) {
+		case 0:
+			return Constants.kVideoQualitySuperb;
+		case 1:
+			return Constants.kVideoQualityHigh;
+		case 3:
+			return Constants.kVideoQualityNormal;
+		case 2:
+		default:
+			return Constants.kVideoQualityStandard;
+		}
+	}
+	
+	public boolean getRunVideoThread() {
+		return mRunVideoThread;
+	}
+	
+	public boolean getRunAudioThread() {
+		return mRunAudioThread;
+	}
+	
+	public boolean getRunTimer() {
+		return false;
+	}
+	
+	public void updateStatus() {
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_CHECK_LIVE_STATUS);
+		params.setActionUrl(mCheckLiveStatusURL);
+		
+		Utils.getInstance().mHttpTask = new HttpTask(mainActivity, new HttpCallbackInterface() {
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam, Object netData) {
+				if(actionId != HttpActionID.ACTION_ID_CHECK_LIVE_STATUS)
+					return;
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void updateStatusUI(Object netData, String prevUpdateTime) {
+		CCVideoCheckLiveStatusEntity entity = (CCVideoCheckLiveStatusEntity)netData;
+		StringBuilder stb = new StringBuilder("");
+		if(entity!=null) {
+			stb.append(entity.mWatchCount);
+		}
+		else {
+			stb.append(0);
+		}
+		stb.append(getResources().getString(R.string.num_people_str));
+		mWatchPeopleCount.setText(stb.toString());
+		mWatchPeopleCount.invalidate();
+		
+		int quality = JNIApi.flymqProducerDropRate();
+		mNetworkQualityBar.setProgress(quality);
+		mNetworkQualityBar.invalidate();
+		
+	}
+	
+	private void updateFlymqAttributes(Object netData, String prevUpdateTime) {
+		if(mProgressDialog != null) {
+			mProgressDialog.dismiss();
+			mProgressDialog = null;
+		}
+		mStartLiveEntity = (CCVideoStartLiveEntity)netData;
+		mCameraID = mStartLiveEntity.mDevID;
+		Utils.getInstance().saveLiveEntity(mainActivity, mStartLiveEntity);
+		
+		if (chattingMessageWithHeartBT != null && mStartLiveEntity.mLinkID != null) {
+			chattingMessageWithHeartBT.startHttpRequest(mStartLiveEntity.mLinkID, Utils.getInstance().getSessionID(mainActivity), mStartLiveEntity.iLiveID);
+		}
+		
+		//AppSysTool.LogDebug("LiveEntity linkid "+mStartLiveEntity.mLinkID);
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kCheckLiveStatusAPI);
+		stb.append(mCameraID);
+		mCheckLiveStatusURL = stb.toString();
+
+		initUpdateLivingTimeTimer();
+		
+		initEncoderAndFlymq();
+		
+		isLiving = true;
+		
+		startLivingDaemon();
+	}
+
+	private void turnOnFlashlight() {
+		if (mCamera != null) {
+			Parameters parameters = mCamera.getParameters();  
+			parameters.setFlashMode(Parameters.FLASH_MODE_TORCH);
+			mCamera.setParameters(parameters);
+		}
+		
+		mFlashlightBtn.setImageResource(R.drawable.icon_light_off);
+		mFlashlightBtn.setTag(1);
+	}
+	
+	private void turnOffFlashlight() {
+		if (mCamera != null) {
+			Parameters parameters = mCamera.getParameters();  
+			parameters.setFlashMode(Parameters.FLASH_MODE_OFF);
+			mCamera.setParameters(parameters);
+		}
+		
+		mFlashlightBtn.setTag(0);
+		mFlashlightBtn.setImageResource(R.drawable.icon_light);
+	}
+
+	public boolean getIsMuted() {
+		return bMuted;
+	}
+	
+	private void updateVideoStatus(int status) {
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUpdateVideoStatusAPI);
+		stb.append("sessionid="+Utils.getInstance().getSessionID(this));
+		stb.append("&vid=" + this.mStartLiveEntity.mLinkID);
+		stb.append("&status=" + status);
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_UPDATE_VIDEO_STATUS);
+		params.setActionUrl(stb.toString());
+		
+		Utils.getInstance().mHttpTask = new HttpTask(mainActivity, new HttpCallbackInterface() {
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam, Object netData) {
+				
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void initViews() {
+		mSnackbar = Snackbar.getInstance(OupaiLivingActivity.this);
+		navigationBar = (LinearLayout)findViewById(R.id.navigation_bar_id);
+		mTitleView = (TextView) mainActivity.findViewById(R.id.oupai_living_title_id);
+		mTitleView.setText(Utils.getInstance().getDefaultRoomTitle());
+		
+		View back = mainActivity.findViewById(R.id.oupai_living_return_btn_id);
+		back.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				destroySendOutputStream();
+			}
+		});
+		
+		View settings = mainActivity.findViewById(R.id.oupai_living_setting_id);
+		settings.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				mSnackbar.show(OupaiLivingActivity.this); 
+				//createLivingBrokenDlg();
+			}
+		});
+		
+		closeLive = (ImageView)mainActivity.findViewById(R.id.oupai_living_close_id);
+		closeLive.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				if(mServiceInited) {
+					destroySendOutputStream();
+				}
+				else {
+					mSnackbar.disableSnackbar();
+					closeLive.setImageResource(R.drawable.button_live_stop);					
+					appDevPlayLiving();
+					stopShowLivingTips();
+					if (msgLayout.getChildCount() == 0 && 
+							!AppSysEnv.getLivingShared(OupaiLivingActivity.this) &&
+							!AppSysEnv.getShareTipsFlag(OupaiLivingActivity.this)) {
+						showShareTipsTimer = new Timer();
+						showShareTipsTimer.schedule(showShareTipsTask, SHOW_SHARE_TIPS_TIMER_DELAY);
+					}
+				}
+			}
+		});
+		
+		mFlashlightBtn = (ImageView)mainActivity.findViewById(R.id.oupai_living_light_btn_id);
+		mFlashlightBtn.setTag(0);
+		mFlashlightBtn.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				int lighting = (Integer) arg0.getTag();
+				ImageView light = (ImageView) arg0;
+				AppSysTool.LogDebug("mCamera +"+mCamera+" mCameraDevice: "+mCameraDevice);
+				if (lighting == 0) {
+					turnOnFlashlight();
+				} else {
+					turnOffFlashlight();
+				}
+			}
+		});
+		
+		ImageView switchCamBtn = (ImageView)findViewById(R.id.oupai_living_switchcam_btn_id);
+		switchCamBtn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				initCameraLayout();
+				
+				if(mCameraSelection == CameraInfo.CAMERA_FACING_FRONT) {
+					turnOffFlashlight();
+					mFlashlightBtn.setVisibility(View.VISIBLE);
+				}
+				else {
+					mFlashlightBtn.setVisibility(View.GONE);
+				}
+				
+				mCameraSelection = (mCameraSelection == CameraInfo.CAMERA_FACING_BACK) ? CameraInfo.CAMERA_FACING_FRONT : CameraInfo.CAMERA_FACING_BACK;
+			}
+		});
+		
+		muteBtn = (ImageView)findViewById(R.id.oupai_living_mute_btn_id);
+		muteBtn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				bMuted = (bMuted ? false : true);
+				if(bMuted)
+					muteBtn.setImageResource(R.drawable.muted);
+				else
+					muteBtn.setImageResource(R.drawable.mute);
+			}
+		});
+		
+		mShareButton = mainActivity.findViewById(R.id.oupai_living_share_id);
+		mShareButton.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				//mShareDialog = new CCVideoShareDialog(getActivity(), R.style.DialogWithNoTitle);
+				if(!mServiceInited) {
+					Toast.makeText(OupaiLivingActivity.this, R.string.live_not_started_yet_str, Toast.LENGTH_LONG).show();
+					return;
+				}
+				
+				if (livingTime < 5) {
+					Toast.makeText(mainActivity, R.string.warning_share_living_fast_str, Toast.LENGTH_SHORT).show();
+					return;
+				}
+				
+				Utils.getInstance().mWXActionType = Constants.kWeixinShareActionType;
+				Utils.getInstance().mShareURL = mStartLiveEntity.mPublicURL;
+				Utils.getInstance().mThumbPath = snapshotPath;
+				Utils.getInstance().mShareFrom = Constants.kFromLive;
+				Utils.getInstance().mShareTitle = OupaiLivingActivity.this.mLiveName;
+				Utils.getInstance().mShareDesc = OupaiLivingActivity.this.getResources().getString(R.string.found_interesting_str)+Utils.getInstance().getUserDname(OupaiLivingActivity.this)+OupaiLivingActivity.this.getResources().getString(R.string.welcome_to_watch_str);
+				Utils.getInstance().mShareIconURL = null;
+				Utils.getInstance().mShareActivity = OupaiLivingActivity.this;
+				
+				mShareDialog = new CCVideoShareDialog(mainActivity, R.style.CustomDialog);
+				mShareDialog.setLiveFragment(OupaiLivingActivity.this);
+				mShareDialog.setTitle(R.string.shareto_str);
+				mShareDialog.show();
+				AppSysEnv.setLivingShared(OupaiLivingActivity.this);
+			}
+		});
+		
+		mLiveRecordTime = (TextView)mainActivity.findViewById(R.id.oupai_living_time_id);
+		
+		mWatchPeopleCount = (TextView)mainActivity.findViewById(R.id.oupai_living_watching_count_id);
+
+		httpHandler = new Handler() {        	
+			@Override
+			public void handleMessage(Message msg) {
+				
+	        	//LinearLayout layout = (LinearLayout)findViewById(R.id.half_player_id);
+	        	//ProgressBar progress = (ProgressBar) findViewById(R.id.half_player_progressbar_id);
+	
+	    		try {
+	    			//AppSysTool.LogDebug("Receive Message "+msg.what);
+	        	switch(msg.what) {
+	        	case OPPlayerActivity.HTTP_FETCH_MESSAGE_OKK:
+	        		displayMessageList();
+	        		break;
+	        	case OPPlayerActivity.HTTP_FETCH_MESSAGE_ERR:
+	        		break;
+	        	case OPPlayerActivity.HTTP_FETCHMSG_AND_LIVINGHT_OKK:
+	        		displayMessageList();
+	        		displayNetworkQuality();
+	        		break;
+	        	case OPPlayerActivity.HTTP_FETCHMSG_AND_LIVINGHT_ERR:
+	        		displayNetworkQuality();
+	        		break;
+	        	case OupaiLivingActivity.UPDATE_LIVING_TIME:
+	        		updateLivingTime();
+	        		checkBrokenLines();
+	        		break;
+	        	case  OPPlayerActivity.HTTP_APPDEVSTOPLIVE_OKK:
+	        		break;
+	        	case OPPlayerActivity.HTTP_APPDEVSTOPLIVE_ERR:
+	        		break;
+	        	case OPPlayerActivity.HTTP_SUBMIT_MESSAGE_OKK:
+	        		EditText et = (EditText) mainActivity.findViewById(R.id.msg_input_id);
+	        		et.setText("");
+	        		
+	        		//chattingMessageWithHeartBT.notifyDaemon();
+	        		break;
+	        	case OPPlayerActivity.HTTP_SUBMIT_MESSAGE_ERR:
+	        		break;
+	        	case OPPlayerActivity.HTTP_LOADING_IMAGE_DONE:
+	        		RunnableImageView rv = (RunnableImageView) msg.obj;
+	        		rv.setImageView();
+	        		msg.obj = null;
+	        		break;
+	        		
+	        	case HIDDEN_LIVING_TIPS_VIEW:
+	        		stopShowLivingTips();
+	        		break;
+	        		
+	        	case SHOW_SHARE_TIPS_VIEW:
+	        		startShowShareTips();
+	        		break;
+	        		
+	        	case HIDDEN_SHARE_TIPS_VIEW:
+	        		stopShowShareTips();
+	        		break;
+	        		
+	    		default:
+	    			Toast.makeText(mainActivity, R.string.error_again_str, Toast.LENGTH_SHORT).show();
+	    			//displayCloseView();
+	            	break;
+	        	}
+	    		} catch (Exception e) {
+	    			e.printStackTrace();
+	    		}
+	        }
+		};
+		
+		msgLayout = (LinearLayout) mainActivity.findViewById(R.id.oupai_living_msg_panel_id);	
+
+		chattingMessageWithHeartBT = new HTTPGetChattingMessageWithLivingHeartBTDaemon(httpHandler,OPPlayerActivity.HTTP_FETCHMSG_AND_LIVINGHT_OKK, OPPlayerActivity.HTTP_FETCHMSG_AND_LIVINGHT_ERR);
+	   	
+		View msgdlg = mainActivity.findViewById(R.id.oupai_living_chatting_id);
+		msgdlg.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				if(!mServiceInited) {
+					Toast.makeText(OupaiLivingActivity.this, R.string.live_not_started_yet_str, Toast.LENGTH_LONG).show();
+					return;
+				}
+				displayMessageDialog();
+			}
+		});
+
+		TextView title = (TextView) mainActivity.findViewById(R.id.oupai_living_title_id);
+		title.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				displayTitleDialog();
+			}
+		});
+		Log.e("AppSysEnv", Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+		if (!AppSysEnv.getLivingTipsFlag(OupaiLivingActivity.this)) {
+			Log.e("AppSysEnv", Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+			showLivingTipsTimer = new Timer();
+			showLivingTipsTimer.schedule(showLivingTipsTask, SHOW_LIVING_TIPS_DURATION);
+		}
+		
+		//showWarningTimer = new Timer();
+		//showWarningTimer.schedule(showWarningTask, 5000);
+		
+	}
+	
+	public void setVideoStatusSharing() {
+		mVideoStatus = Constants.kVideoStatusSharing;
+	}
+	
+	private void displayNetworkQuality()
+	{
+		int quality =  JNIApi.flymqProducerDropRate();
+		
+		AppSysTool.LogDebug("Quality is "+quality);
+	}
+	
+	private void checkStopRecording()
+	{
+		if(mServiceInited) {
+			
+
+		}
+		else {
+			
+		}
+	}
+	
+	private TimerTask showLivingTipsTask = new TimerTask() {
+		@Override
+		public void run() {
+			Message msg = new Message();
+			msg.what = HIDDEN_LIVING_TIPS_VIEW;
+			httpHandler.sendMessage(msg);
+		}
+	};
+	
+	private TimerTask showShareTipsTask = new TimerTask() {
+		@Override
+		public void run() {
+			Message msg = new Message();
+			msg.what = SHOW_SHARE_TIPS_VIEW;
+			httpHandler.sendMessage(msg);
+		}
+	};
+	
+	private TimerTask hiddenShareTipsTask = new TimerTask() {
+		@Override
+		public void run() {
+			Message msg = new Message();
+			msg.what = HIDDEN_SHARE_TIPS_VIEW;
+			httpHandler.sendMessage(msg);
+		}
+	};
+	
+	private void startShowLivingTips() {
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()) + isShowLivingTips);
+		Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()) + AppSysEnv.getLivingTipsFlag(OupaiLivingActivity.this));
+		View livingTips = findViewById(R.id.oupai_living_tips_id);
+		if (isShowLivingTips && !AppSysEnv.getLivingTipsFlag(OupaiLivingActivity.this)) {
+			livingTips.setVisibility(View.VISIBLE);
+			Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()));
+			AppSysEnv.setLivingTipsFlag(OupaiLivingActivity.this);
+			Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()) + AppSysEnv.getLivingTipsFlag(OupaiLivingActivity.this));
+		} else {
+			livingTips.setVisibility(View.INVISIBLE);
+		}
+	}
+	
+	private void stopShowLivingTips() {
+		View livingTips = findViewById(R.id.oupai_living_tips_id);
+		livingTips.setVisibility(View.INVISIBLE);
+		isShowLivingTips = false;
+		if (showLivingTipsTimer != null) {
+			showLivingTipsTimer.cancel();
+			showLivingTipsTimer = null;
+		}
+	}
+	
+	//TODO
+	private void startShowShareTips() {
+		if (msgLayout.getChildCount() == 0 && 
+			!AppSysEnv.getLivingShared(OupaiLivingActivity.this) &&
+			!AppSysEnv.getShareTipsFlag(OupaiLivingActivity.this)) {
+			View shareTips = findViewById(R.id.oupai_share_tips_id);
+			shareTips.setVisibility(View.VISIBLE);
+			AppSysEnv.setShareTipsFlag(OupaiLivingActivity.this);
+			// reuse showShareTipsTimer?
+			if (showShareTipsTimer != null) {
+				showShareTipsTimer.cancel();
+				showShareTipsTimer = null;
+			}
+			hiddenShareTipsTimer = new Timer();
+			hiddenShareTipsTimer.schedule(hiddenShareTipsTask, SHOW_SHARE_TIPS_DURATION);
+		}
+	}
+	
+	private void stopShowShareTips() {
+		View shareTips = findViewById(R.id.oupai_share_tips_id);
+		shareTips.setVisibility(View.INVISIBLE);
+		if (hiddenShareTipsTimer != null) {
+			hiddenShareTipsTimer.cancel();
+			hiddenShareTipsTimer = null;
+		}
+	}
+	
+	private void displayTitleDialog()
+	{
+		View mView = LayoutInflater.from(mainActivity).inflate(R.layout.dialog_oupai_living_message, null);  
+		
+		mView.findViewById(R.id.btn_send).setVisibility(View.VISIBLE);
+		mView.findViewById(R.id.bt_layout).setVisibility(View.GONE);
+		
+	    Dialog msgdlgView = new Dialog(mainActivity, R.style.MessageInputDialog);  
+	    msgdlgView.setCancelable(false);
+	    
+	    mTitleView = (TextView) mainActivity.findViewById(R.id.oupai_living_title_id);
+	}
+	
+	private void displayMessageDialog()
+	{
+		View mView = LayoutInflater.from(mainActivity).inflate(R.layout.dialog_oupai_living_message, null);   
+		
+		mView.findViewById(R.id.btn_send).setVisibility(View.VISIBLE);
+		mView.findViewById(R.id.bt_layout).setVisibility(View.GONE);
+		
+	    Dialog msgdlgView = new Dialog(mainActivity, R.style.MessageInputDialog);  
+	  
+	    msgdlgView.setCancelable(true);  
+	    msgdlgView.setContentView(mView);  
+
+	    View close = mView.findViewById(R.id.oupai_living_msg_close_id);
+	    close.setTag(msgdlgView);
+	    close.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				Dialog msgdlgView = (Dialog)arg0.getTag();
+				msgdlgView.cancel();
+			}
+		});
+	   
+	    View submit = mView.findViewById(R.id.btn_send);
+	    mView.setTag(msgdlgView);
+	    submit.setTag(mView);
+	    
+	    submit.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				View mView = (View)arg0.getTag();
+				Dialog msgdlgView = (Dialog)mView.getTag();
+				
+				EditText et = (EditText) mView.findViewById(R.id.et_sendmessage);
+				String msg = et.getText().toString().trim();
+				if (msg.length() < 1) {
+					Toast.makeText(mainActivity, R.string.error_desc_min_length_str, Toast.LENGTH_SHORT).show();
+					return;
+				}
+				if (msg.length() > 128) {
+					Toast.makeText(mainActivity, R.string.error_desc_max_length_str, Toast.LENGTH_SHORT).show();
+					return;
+				}
+
+				if (mStartLiveEntity != null && mStartLiveEntity.mLinkID != null) {
+					//AppSysTool.LogDebug("Submit message ...");
+					chattingMessageWithHeartBT.submitMessage(msg);
+					//submitMessageDaemon.startHttpRequest(mStartLiveEntity.mLinkID, Utils.getInstance().getSessionID(mainActivity), msg);
+				} else {
+					AppSysTool.LogDebug("Cannot get linkid");
+				}
+				et.setText("");
+				msgdlgView.cancel();
+			}
+		});
+	    
+	    msgdlgView.show();
+	    
+	}
+	
+	private void stopSendOutputStream()
+	{
+		if (isLiving == false) {
+			return;
+		}
+		
+		View mView = LayoutInflater.from(mainActivity).inflate(R.layout.dialog_stop_living_layout, null);    
+	    Dialog dlg = new Dialog(mainActivity, R.style.StopOutputStreamDailog); 
+	    dlg.setCancelable(true);
+
+	    mView.setTag(dlg);
+	    
+	    View cancel = mView.findViewById(R.id.dialog_stop_living_cancel_id);
+	    cancel.setTag(dlg);
+	    cancel.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				Dialog dlg = (Dialog) arg0.getTag();
+				dlg.cancel();				
+			}
+		});
+	    
+	    View confirm = mView.findViewById(R.id.dialog_stop_living_confirm_id);
+	    confirm.setTag(mView);
+	    
+	    confirm.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				View mView = (View) arg0.getTag();
+				
+				CheckBox storage = (CheckBox) mView.findViewById(R.id.dialog_stop_living_storage_id);
+				
+				CheckBox share = (CheckBox) mView.findViewById(R.id.dialog_stop_living_share_id);
+
+				new HTTPAppDevStopLiveDaemon(httpHandler, OPPlayerActivity.HTTP_APPDEVSTOPLIVE_OKK, OPPlayerActivity.HTTP_APPDEVSTOPLIVE_ERR)
+					.startHttpRequest(mStartLiveEntity.mLinkID, storage.isChecked(), share.isChecked());
+
+				Dialog dlg = (Dialog) mView.getTag();
+				dlg.cancel();
+				
+				isLiving = false;
+			}
+		});
+	    
+	    dlg.setContentView(mView);
+	    dlg.show();
+	}
+	
+	@Override  
+	public boolean onKeyDown(int keyCode, KeyEvent event)  
+	{  
+	        switch (keyCode){
+	        case KeyEvent.KEYCODE_BACK:
+	        	destroySendOutputStream();
+	        	break;
+	        default:
+	        	return super.onKeyDown(keyCode, event);
+	        }
+	          
+	        return false;            
+	} 
+	
+	private void destroySendOutputStream()
+	{
+		if (isLiving == false) {
+			mainActivity.finish();
+			return;
+		}
+		
+		ActionSheet.createBuilder(this, getSupportFragmentManager())
+			.setCancelButtonTitle(R.string.cancel_str)
+			.setOtherButtonTitles(getResources().getString(R.string.save_to_personal_center), getResources().getString(R.string.delete_live))
+			.setTag("stopLiveTag")
+			.setCancelableOnTouchOutside(true).setListener(this).show();
+	}
+	
+	private void displayMessageList()
+	{
+		try {
+			while(layoutInflater != null) {
+				MessageEntity entity = chattingMessageWithHeartBT.getNextLiving();
+				if (entity == null) {
+					break;
+				}	
+
+				View msgview = this.layoutInflater.inflate(R.layout.messge_list_item, null);
+				
+				ImageView thumb = (ImageView) msgview.findViewById(R.id.msg_logo_id);
+//				new Thread(new RunnableImageView( thumb, entity.user_thumb)).start();
+				Utils.getInstance().imageLoader.displayImage(entity.user_thumb, thumb);
+				
+				TextView  nv =  (TextView) msgview.findViewById(R.id.msg_name_id);
+				nv.setText(entity.display_name);
+				
+				TextView  time =  (TextView) msgview.findViewById(R.id.msg_time_id);
+				
+				if (entity.ptime < 60) {
+					time.setText(mainActivity.getResources().getString(R.string.just_now_str));
+				} else if (entity.ptime < 3600) {
+					time.setText(""+(entity.ptime/60)+mainActivity.getResources().getString(R.string.minutes_ago_str));
+				} else if (entity.ptime < 3600*24) {
+					time.setText(""+(entity.ptime/3600)+mainActivity.getResources().getString(R.string.hour_ago_str));
+				} else if (entity.ptime < 3600*24*30) {
+					time.setText(""+(entity.ptime/(3600*24))+mainActivity.getResources().getString(R.string.day_ago_str));
+				} else if (entity.ptime < 3600*24*30*12) {
+					time.setText(""+(entity.ptime/(3600*24*30))+mainActivity.getResources().getString(R.string.month_ago_str));
+				} else {
+					time.setText(""+(entity.ptime/(3600*24*30*12))+mainActivity.getResources().getString(R.string.year_ago_str));
+				}
+
+				TextView  mv =  (TextView) msgview.findViewById(R.id.msg_text_id);
+				SpannableString spannableString = FaceConversionUtil.getInstace().getExpressionString(OupaiLivingActivity.this, entity.content);
+				mv.setText(spannableString);
+				
+				this.msgLayout.addView(msgview, 0);
+				Log.e(TAG, Utils.getFileName(new Exception()) + " : " + Utils.getLineNumber(new Exception()) + ": " + msgLayout.getChildCount());
+				//if (msgLayout.getChildCount() % 2 == 0) {
+				//	msgview.setBackgroundColor(0x242424);
+				//}				
+			}
+			
+			TextView  comment_count =  (TextView) mainActivity.findViewById(R.id.oupai_living_comment_count_id);
+			comment_count.setText(""+chattingMessageWithHeartBT.video_comment_count);
+			
+			TextView  like_count =  (TextView) mainActivity.findViewById(R.id.oupai_living_like_count_id);
+			like_count.setText(""+chattingMessageWithHeartBT.video_like_count);
+			
+			TextView  watching_count =  (TextView) mainActivity.findViewById(R.id.oupai_living_watching_count_id);
+			watching_count.setText(""+chattingMessageWithHeartBT.video_watching_count);
+			
+			TextView  watch_count =  (TextView) mainActivity.findViewById(R.id.oupai_living_watch_count_id);
+			watch_count.setText(""+chattingMessageWithHeartBT.video_watch_count);
+			
+			if(chattingMessageWithHeartBT.living == 0) {
+				createLivingBrokenDlg(R.string.living_broken_dlg_text);
+				
+				if (this.chattingMessageWithHeartBT != null) {
+					this.chattingMessageWithHeartBT.stopRunning();
+					chattingMessageWithHeartBT = null;
+				}
+			}
+			
+			mIsFetchingComments = false; 
+		} catch (Exception e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+			//Toast.makeText(mainActivity, R.string.error_net_str, Toast.LENGTH_SHORT).show();
+			return;
+		} 
+
+	}
+	
+	private void shareWeixin(int shareMode) {
+		
+		//AppSysTool.LogDebug("Share To Weixin");
+		
+		wxAPI.registerApp(Constants.WX_APP_ID);
+		
+		WXWebpageObject webpage = new WXWebpageObject();
+		webpage.webpageUrl = mStartLiveEntity.mPublicURL;//863170020704901
+		WXMediaMessage msg = new WXMediaMessage(webpage);
+		msg.title = getResources().getString(R.string.welcome_to_watch) + mUserDname;
+		msg.description = getResources().getString(R.string.share_description_header) + mUserDname + getResources().getString(R.string.share_description_content);
+		
+		File thumbFile = new File(snapshotPath);
+		Bitmap thumbnail = null;
+		if(thumbFile.exists()) {
+			thumbnail = BitmapFactory.decodeFile(snapshotPath);
+		}
+		else {
+			thumbnail = BitmapFactory.decodeResource(getResources(), R.drawable.app_logo); 
+		}
+		msg.thumbData = Utils.getInstance().createWeixinShareBitmap(thumbnail);//Utils.bmpToByteArray(thumbnail, true);
+		
+		SendMessageToWX.Req req = new SendMessageToWX.Req();
+		req.transaction = String.valueOf(System.currentTimeMillis());
+		req.message = msg;
+		req.scene = shareMode;
+		boolean ret = wxAPI.sendReq(req);
+		
+		AppSysTool.LogDebug("Share To Weixin "+ret);
+	}
+	
+	public void shareIndex(int position) {
+		switch(position) {
+		case Constants.kShareToWeixinFriends:
+			shareWeixin(SendMessageToWX.Req.WXSceneSession);
+			break;
+		case Constants.kShareToWeixinCircle:
+			shareWeixin(SendMessageToWX.Req.WXSceneTimeline);
+			break;
+		default:
+			break;
+		}
+	}
+
+	private void startLivingDaemon() {
+		try {
+			if (mAudioRecordRunnable != null) {
+				mAudioRecordRunnable.startDaemon();
+				mRunAudioThread = true;
+			}
+			
+			if (mVideoRecordRunnable != null) {
+				mVideoRecordRunnable.startDaemon();
+				mRunVideoThread = true;
+			}
+	
+			recorderStatus = Constants.kCameraRecording;
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
+	
+	private void stopLivingDaemon() {
+		if (mAudioRecordRunnable != null) {
+			mAudioRecordRunnable.stopDaemon();
+		}
+		
+		if (mVideoRecordRunnable != null) {
+			mVideoRecordRunnable.stopDaemon();
+		}		
+	}
+//	
+//	private void initRenderSurface() {
+//		if(!bSurfaceCreated) {
+//			  mGLSurfaceView = (CCVideoGLSurfaceView)findViewById(R.id.recorder_liveview_id);
+//			  mGLSurfaceView.setEGLContextClientVersion(2);
+//			  mGLLiveRenderer = new CCVideoLiveRenderer(this, mGLSurfaceView);
+//			  mGLLiveRenderer.update(mVideoRecordRunnable.videoWidth, mVideoRecordRunnable.videoHeight);
+//			  
+//			  mGLSurfaceView.setRenderer(mGLLiveRenderer);
+//			 
+//			  mGLSurfaceView.getLayoutParams().width = screenWidth;
+//			  mGLSurfaceView.getLayoutParams().height = (int)((screenWidth / 16.f) * 9.f);
+//			  bSurfaceCreated = true;
+//			  
+//			  tempResizeBuf = new byte[encodeWidth * encodeHeight * 3 / 2];
+//		}
+//	}
+	
+	private void initCameraLayout() {
+		
+		new AsyncTask<String, Integer, Boolean>(){
+
+			@Override
+			protected Boolean doInBackground(String... arg0) {
+//				boolean result = setCamera();
+				
+				return true;
+			}
+			
+			@Override
+			protected void onPostExecute(Boolean result) {
+				
+//				if(!result || mCameraDevice == null){
+//					//TODO: Error report
+//					return;
+//				}
+
+				Log.d("CameraDebug", "Init camera layout");
+				
+				if(cameraControl == null) {
+					cameraControl = (LinearLayout)findViewById(R.id.camera_control_id);
+					LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(screenWidth, (int) (screenWidth * (9 / 16.f)));
+					cameraControl.setLayoutParams(layoutParams);
+				}
+				
+				topLayout = (RelativeLayout) mainActivity.findViewById(R.id.oupai_living_surface_parent_id);
+				if(topLayout!=null && topLayout.getChildCount()>0) {
+					topLayout.removeAllViews();
+				}
+				
+//				View renderView = findViewById(R.id.recorder_liveview_id);
+//				
+//				for(int i=0; i<topLayout.getChildCount(); i++) {
+//					
+//					View view = topLayout.getChildAt(i);
+//					
+//					if(view == renderView) {
+//						continue;
+//					}
+//					
+//					if(view.getTag() == VIEW_CAMERA) {
+//						topLayout.removeViewAt(i);
+//					}
+//					
+//				}
+//				
+				camView = new SurfaceView(OupaiLivingActivity.this);
+				SurfaceHolder camHolder = camView.getHolder();
+				mCameraView = null;
+				mCameraView = new CameraView(mainActivity, mCameraDevice);
+				camHolder.addCallback(mCameraView);
+				camHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+				
+				mCameraView.setTag(VIEW_CAMERA);
+				camView.setTag(VIEW_CAMERA);
+
+				handleSurfaceChanged();
+				
+				Log.d("CameraDebug", "Setting offset: " + mCameraViewOffset);
+				RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams)topLayout.getLayoutParams();
+				lp.width = screenWidth;
+				lp.height = (int)(screenWidth * previewWidth / (previewHeight * 1.0f));
+				
+				topLayout.setLayoutParams(lp);
+				
+				if(true) {
+					RelativeLayout.LayoutParams layoutParam1 = new RelativeLayout.LayoutParams(screenWidth,(int) (screenWidth*(previewWidth/(previewHeight*1.f))));
+					
+					if(mCameraSelection == CameraInfo.CAMERA_FACING_BACK) {
+						layoutParam1.topMargin = -(mCameraViewOffset);
+					}
+					layoutParam1.addRule(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
+					
+					topLayout.addView(camView, layoutParam1);
+
+//					camView.setOnTouchListener(new View.OnTouchListener() {
+//						@Override
+//						public boolean onTouch(View arg0, MotionEvent event) {
+//							if(event.getAction() == MotionEvent.ACTION_DOWN) {
+//								focusEvent(event);
+//							}
+//							return false;
+//						}
+//					});
+				}
+				
+				if(true) {
+					RelativeLayout.LayoutParams layoutParam2 = new RelativeLayout.LayoutParams(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
+					layoutParam2.topMargin = (int) (screenWidth * 9.f / 16.f);
+					
+					mCameraHeight = layoutParam2.topMargin;
+					
+					mCoverView = null;
+					mCoverView = new View(OupaiLivingActivity.this);
+					mCoverView.setFocusable(false);
+					mCoverView.setBackgroundColor(getResources().getColor(R.color.camera_bkg_color));
+					mCoverView.setFocusableInTouchMode(false);
+					mCoverView.setTag(VIEW_COVER);
+					
+					topLayout.addView(mCoverView,layoutParam2);
+					
+				}
+
+				navigationBar.bringToFront();
+				
+//				renderView.bringToFront();
+				
+				recorderStatus = Constants.kCameraPreviewing;
+			}
+			
+		}.execute("start");
+		
+		
+		
+////		new Handler().postDelayed(new Runnable() {
+////			@Override
+////			public void run() {
+//
+//				boolean result = setCamera();
+//				if(!result || mCameraDevice == null){
+//					//TODO: Error report
+//					return;
+//				}
+//
+//				mCameraView = null;
+//				mCameraView = new CameraView(mainActivity, mCameraDevice);
+//				mCameraView.setTag(VIEW_CAMERA);
+//				
+//				if(cameraControl == null) {
+//					cameraControl = (LinearLayout)findViewById(R.id.camera_control_id);
+//					LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(screenWidth, (int) (screenWidth * (9 / 16.f)));
+//					cameraControl.setLayoutParams(layoutParams);
+//				}
+//				
+//				topLayout = (RelativeLayout) mainActivity.findViewById(R.id.oupai_living_surface_parent_id);
+//				if(topLayout!=null && topLayout.getChildCount()>0) {
+//					topLayout.removeAllViews();
+//				}
+//
+//				LayoutParams lp = topLayout.getLayoutParams();
+//				lp.width = screenWidth;
+//				lp.height = (int)(screenWidth * previewWidth / (previewHeight * 1.0f));
+//				topLayout.setLayoutParams(lp);
+//				
+//				if(true) {
+//
+//					handleSurfaceChanged();
+//
+//					RelativeLayout.LayoutParams layoutParam1 = new RelativeLayout.LayoutParams(screenWidth,(int) (screenWidth*(previewWidth/(previewHeight*1.f))));
+////					layoutParam1.addRule(RelativeLayout., RelativeLayout.TRUE);
+//					if(mCameraSelection == CameraInfo.CAMERA_FACING_BACK)
+//						layoutParam1.topMargin = -(int)(mCameraViewOffset);
+////					else 
+////						layoutParam1.topMargin = -(int)(mCameraViewOffset);
+////					
+//					topLayout.addView(mCameraView, layoutParam1);
+//
+//					mCameraView.setOnTouchListener(new View.OnTouchListener() {
+//						@Override
+//						public boolean onTouch(View arg0, MotionEvent event) {
+//							if(event.getAction() == MotionEvent.ACTION_DOWN) {
+//								focusEvent(event);
+//							}
+//							return false;
+//						}
+//					});
+//				}
+//				
+//				if(true) {
+//					RelativeLayout.LayoutParams layoutParam2 = new RelativeLayout.LayoutParams(RelativeLayout.ALIGN_PARENT_TOP, RelativeLayout.TRUE);
+//					layoutParam2.topMargin = (int) (screenWidth * (9 / 16.f));
+//					
+//					mCoverView = null;
+//					mCoverView = new View(OupaiLivingActivity.this);
+//					mCoverView.setFocusable(false);
+//					mCoverView.setBackgroundColor(getResources().getColor(R.color.camera_bkg_color));
+//					mCoverView.setFocusableInTouchMode(false);
+//					mCoverView.setTag(VIEW_COVER);
+//					
+//					topLayout.addView(mCoverView,layoutParam2);
+//					
+//				}
+//
+//				navigationBar.bringToFront();
+//				
+//				recorderStatus = Constants.kCameraPreviewing;
+////			}
+////		}, 0);
+	}
+	
+	@TargetApi(Build.VERSION_CODES.GINGERBREAD)
+	@SuppressLint("NewApi")
+	private boolean setCamera()
+	{
+		try
+		{			
+			if(Build.VERSION.SDK_INT > Build.VERSION_CODES.FROYO) {
+				int numCameras = Camera.getNumberOfCameras();
+				CameraInfo info = new CameraInfo();
+				for(int i=0; i<numCameras; i++) {
+					Camera.getCameraInfo(i, info);
+					if(info.facing == mCameraSelection) {
+						mDefaultCameraID = i;
+					}
+				}
+			}
+			
+			stopPreview();
+			if(mCamera != null) {
+				mCamera.release();
+			}
+			
+			if(mDefaultCameraID >= 0)
+				mCameraDevice = Camera.open(mDefaultCameraID);
+			else
+				mCameraDevice = Camera.open();
+		}
+		catch(Exception e)
+		{	
+			return false;
+		}
+		return true;
+	}
+	
+	@SuppressLint("NewApi")
+	private void focusEvent(MotionEvent event) {
+		if(mCameraSelection == CameraInfo.CAMERA_FACING_FRONT) {
+			return;
+		}
+
+		if(mCamera != null) {
+			
+			Camera.Parameters parameters = mCamera.getParameters();
+
+		    AutoFocusCallback autoFocusCallback = new AutoFocusCallback() {
+		        @Override
+		        public void onAutoFocus(boolean success, Camera camera) {
+		        	return;
+		        }
+		      };//end 
+			
+			
+			if(parameters.getMaxNumMeteringAreas() > 0) {
+				Rect rect = calculateFocusArea(event.getX(), event.getY());
+				
+				parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+				List<Camera.Area> meteringAreas = new ArrayList<Camera.Area>();
+				meteringAreas.add(new Camera.Area(rect, 800));
+	            parameters.setFocusAreas(meteringAreas);
+
+	            try {
+	            	mCamera.setParameters(parameters);
+	            	mCamera.autoFocus(autoFocusCallback);
+	            }
+	            catch(Exception e)  {
+	            	e.printStackTrace();
+	            }
+	        }else {
+	            mCamera.autoFocus(autoFocusCallback);
+	        }
+		}
+	}
+	
+	
+	private Rect calculateFocusArea(float x, float y) {
+	    int left = clamp(Float.valueOf((x / mCameraView.getWidth()) * 2000 - 1000).intValue(), FOCUS_AREA_SIZE);
+	    int top = clamp(Float.valueOf((y / mCameraView.getHeight()) * 2000 - 1000).intValue(), FOCUS_AREA_SIZE);
+
+	    return new Rect(left, top, left + FOCUS_AREA_SIZE, top + FOCUS_AREA_SIZE);
+	}
+
+	private int clamp(int touchCoordinateInCameraReper, int focusAreaSize) {
+	    int result;
+	    if (Math.abs(touchCoordinateInCameraReper)+focusAreaSize/2>1000){
+	        if (touchCoordinateInCameraReper>0){
+	            result = 1000 - focusAreaSize/2;
+	        } else {
+	            result = -1000 + focusAreaSize/2;
+	        }
+	    } else{
+	         result = touchCoordinateInCameraReper - focusAreaSize/2;
+	    }
+	    return result;
+	}
+	
+	public void stopPreview() {
+		if (isPreviewOn && mCamera != null) {
+			isPreviewOn = false;
+			mCamera.stopPreview();
+		}
+	}
+
+	private boolean initEncoderAndFlymq() {
+		// Init video encoder
+		
+		if(mServiceInited == false) {
+			return false;
+		} else {
+			if(mStartLiveEntity.mDstHost == null) {
+				mStartLiveEntity.mDstHost = Constants.kDefaultHost;
+			}
+			if(mStartLiveEntity.mDstPort == null) {
+				mStartLiveEntity.mDstPort = Constants.kDefaultPort;
+			}
+		}
+		if (mStartLiveEntity.mDstProtocol == null) {
+			return false;
+		}
+		
+		AppSysTool.LogDebug("Protocol "+mStartLiveEntity.mDstProtocol);
+		if (mStartLiveEntity.mDstProtocol != null) {
+			if(JNIApi.flymqProducerOpen(mStartLiveEntity.mDstProtocol, mStartLiveEntity.mDstHost, Integer.valueOf(mStartLiveEntity.mDstPort), mStartLiveEntity.mDevID+".output") < 0) {
+				return false;
+			}
+		}
+		
+//		JNIApi.flymqScalerOpen();
+		
+		return true;
+	}
+	
+//
+//	public byte[] getYUVData(byte[] data, boolean frontCamera, int previewWidth, int previewHeight) {
+//
+//		byte[] tempData;
+//		
+//		if(frontCamera) {
+//			tempData = Utils.getInstance().rotateYUV420Degree270(data, previewWidth, previewHeight);
+////			if(!hasWritten) {
+////				try {
+////					FileOutputStream stream = new FileOutputStream("/sdcard/input_from_java.yuv");
+////					stream.write(tempData);
+////					stream.close();
+////				} catch (Exception e) {
+////					// TODO Auto-generated catch block
+////					e.printStackTrace();
+////				}
+////				hasWritten = true;
+////			}
+////			
+////			if(needResize) {
+////				byte[] tempResizeBuf = new byte[encodeWidth * encodeHeight * 3 / 2];
+////				JNIApi.flymqScalerPerform(tempData, tempResizeBuf);
+////				return tempResizeBuf;
+////			}
+//			return tempData;
+//		}
+//		else {
+//			tempData = Utils.getInstance().rotateYUV420Degree90(data, previewWidth, previewHeight, encodeWidth, encodeHeight);
+//			return tempData;
+//		}
+//	}
+//	
+	
+	public void updateTimer(String updatedTime) {
+	}
+	
+	public void updateLiveName(String liveName) {
+		mLiveName = liveName;
+		//mLiveNameTextView.setText(mLiveName);
+		//mLiveNameTextView.invalidate();
+	}
+	
+	private void handleSurfaceChanged()
+	{
+		if(mCamera == null){
+			return;
+		}
+		List<Camera.Size> resolutionList = Utils.getResolutionList(mCamera);
+		if(resolutionList != null && resolutionList.size() > 0){
+			Collections.sort(resolutionList, new Utils.ResolutionComparator());
+			Camera.Size previewSize =  null;	
+			if(defaultScreenResolution == -1){
+				boolean hasSize = false;
+				for(int i = 0;i<resolutionList.size();i++){
+					Size size = resolutionList.get(i);
+					if(size != null && size.width==previewWidth && size.height==previewHeight){
+						previewSize = size;
+						hasSize = true;
+						break;
+					}
+				}
+				
+				if(!hasSize){
+					int minDiff = 10000;
+					Size bestSize = resolutionList.get(resolutionList.size()/2);
+					for(int i=0; i<resolutionList.size()-1; i++) {
+						Size size = resolutionList.get(i);
+						int diff = Math.abs(size.width - previewWidth);
+						
+						if(minDiff > diff) {
+							minDiff = diff;
+							bestSize = size;
+						}
+					}
+
+					previewSize = bestSize;
+				}
+			}else{
+				if(defaultScreenResolution >= resolutionList.size())
+					defaultScreenResolution = resolutionList.size() - 1;
+				previewSize = resolutionList.get(defaultScreenResolution);
+			}
+			if(previewSize != null) {
+				previewWidth = previewSize.width;
+				previewHeight = previewSize.height;
+				mCameraParameters.setPreviewSize(previewWidth, previewHeight);
+			}
+		}
+
+		int vw = screenWidth;
+		int vh = (int)((vw / (float)(previewHeight)) * previewWidth);
+
+		mCameraViewOffset = (int)((vh - vw / 16.f * 9.f) / 2.f) / 2 * 2;
+
+		mCameraParameters.setPreviewFrameRate(frameRate);
+
+		mCamera.setDisplayOrientation(90);
+		
+		if(previewHeight != encodeWidth) {
+			needResize = true;
+		}
+		
+		initGLSurfaces();
+//		JNIApi.flymqScalerSetParams(previewWidth, previewHeight, encodeWidth, encodeHeight);
+
+		try {
+			if(Build.VERSION.SDK_INT >  Build.VERSION_CODES.FROYO)
+			{
+				List<String> focusModes = mCameraParameters.getSupportedFocusModes();
+				if(focusModes != null){
+					Log.i("video", Build.MODEL);
+					 if (((Build.MODEL.startsWith("GT-I950"))
+							 || (Build.MODEL.endsWith("SCH-I959"))
+							 || (Build.MODEL.endsWith("MEIZU MX3")))&&focusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE)){
+						 mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+					 } else if(focusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO)){
+						 mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+					 } else if(focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO)) {
+						 mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+					 } else if(focusModes.contains(Camera.Parameters.FOCUS_MODE_FIXED)) {
+						mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
+					 }
+				}
+			}
+			else {
+				List<String> focusModes = mCameraParameters.getSupportedFlashModes();
+
+				if(focusModes.contains(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO))
+					mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+				else if(focusModes.contains(Camera.Parameters.FOCUS_MODE_AUTO))
+					mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+				else if(focusModes.contains(Camera.Parameters.FOCUS_MODE_FIXED))
+					mCameraParameters.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
+			}
+			mCamera.setParameters(mCameraParameters);
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+
+	class CameraView extends SurfaceView implements SurfaceHolder.Callback, PreviewCallback {
+		private Context mContext;
+		private SurfaceHolder mHolder;
+		private boolean inited = false;
+		
+		public CameraView(Context context) {
+			super(context);
+			mContext = context;
+		}
+		
+		private void initCameraView(Camera camera) {
+			mCamera = camera;
+			mCameraParameters = mCamera.getParameters();
+			mHolder = getHolder();
+			mHolder.addCallback(CameraView.this);
+			mHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+			
+		}
+		
+		private void setPreviewCallback() {
+			mCamera.setPreviewCallback(CameraView.this);
+		}
+		
+		
+		
+		public CameraView(Context context, Camera camera) {
+			super(context);
+			Log.d("CameraDebug", "Cameraview inited");
+		}
+		
+		public void startPreview() {
+			//if (!isPreviewOn && mCamera != null) {
+			if(mCamera != null) {
+				isPreviewOn = true;
+				mCamera.startPreview();
+			}
+		}
+		
+		public void stopPreview() {
+			if (isPreviewOn && mCamera != null) {
+				isPreviewOn = false;
+				try {
+					mCamera.stopPreview();
+				} catch(Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		private void dumpSnapshot(byte[] data) {
+	    	try {
+	    		AppSysTool.LogDebug("Preview Width "+previewWidth+" "+previewHeight);
+	    		
+	    		byte[] tempData = null;
+
+				if(mCameraSelection == CameraInfo.CAMERA_FACING_FRONT)
+					tempData = Utils.getInstance().rotateYUV420Degree270(data, previewWidth, previewHeight, mVideoRecordRunnable.videoWidth, mVideoRecordRunnable.videoHeight);
+				else
+					tempData = Utils.getInstance().rotateYUV420Degree90(data, previewWidth, previewHeight, mVideoRecordRunnable.videoWidth, mVideoRecordRunnable.videoHeight);
+				
+	    		
+	    		YuvImage image = new YuvImage(tempData, ImageFormat.NV21, mVideoRecordRunnable.videoWidth, mVideoRecordRunnable.videoHeight, null);
+
+		    	FileOutputStream filecon = new FileOutputStream(snapshotPath);
+		        image.compressToJpeg(
+		                new Rect(0, 0, mVideoRecordRunnable.videoWidth, mVideoRecordRunnable.videoHeight), 70,
+		                filecon);
+	    	}
+	    	catch (Exception e) {
+	    		e.printStackTrace();
+	    	}
+		}
+		
+		@Override
+		public void onPreviewFrame(byte[] data, Camera camera) {
+			if(isSavedSnapshot) {
+				dumpSnapshot(data);
+				isSavedSnapshot = false;
+			}
+			
+//			byte[] encodeYUV = getYUVData(data, mCameraSelection==CameraInfo.CAMERA_FACING_FRONT, 
+//					previewWidth, previewHeight);
+			
+			
+//			displayYUVData(encodeYUV, encodeWidth, encodeHeight);
+			
+			// Send to encode.
+			if(mRunVideoThread) {
+				if(mCameraSelection==CameraInfo.CAMERA_FACING_FRONT)
+					mVideoRecordRunnable.enqueueData(data, Constants.kCameraFront);
+				else
+					mVideoRecordRunnable.enqueueData(data, Constants.kCameraBack);
+			}
+			
+			mFramesGone++;
+		}
+		
+		@Override
+		public void surfaceChanged(SurfaceHolder arg0, int arg1, int arg2,
+				int arg3) {
+			Log.d("CameraDebug", "SurfaceChanged");
+			if (isPreviewOn)
+				mCamera.stopPreview();
+			handleSurfaceChanged();
+			setPreviewCallback();
+			
+			startPreview();
+			mCamera.autoFocus(null);
+			
+			RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams)camView.getLayoutParams();
+			params.topMargin = -mCameraViewOffset;
+			camView.setLayoutParams(params);
+		}
+		
+		@Override
+		public void surfaceCreated(SurfaceHolder holder) {
+			Log.d("CameraDebug", "SurfaceCreated");
+			setCamera();
+
+			initCameraView(mCameraDevice);
+			setPreviewCallback();
+			try {
+				stopPreview();
+				mCamera.setPreviewDisplay(holder);
+			} catch (IOException exception) {
+				mCamera.release();
+				mCamera = null;
+				exception.printStackTrace();
+			}
+		}
+		
+		@Override
+		public void surfaceDestroyed(SurfaceHolder holder) {
+			Log.d("CameraDebug", "SurfaceDestroyed");
+			try {
+				mHolder.addCallback(null);
+				mCamera.setPreviewCallback(null);
+				
+				if(mCamera  != null) {
+					mCamera.setPreviewCallback(null);
+					mCamera.release();
+					mCamera = null;
+				}
+				if(mCameraDevice != null) {
+					mCameraDevice.release();
+					mCameraDevice = null;
+				}
+			} catch (RuntimeException e) {
+			}
+		}
+	}
+	
+	class AsyncStartVideoRecording extends AsyncTask<Void, Integer, Void> {
+		@Override
+		protected Void doInBackground(Void... arg0) {
+			mVideoRecordRunnable.run();
+			return null;
+		}
+		
+		@Override
+		protected void onPreExecute() {
+			mRunVideoThread = true;
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			
+		}
+	}
+	
+	class AsyncStartAudioRecording extends AsyncTask<Void, Integer, Void> {
+
+		@Override
+		protected Void doInBackground(Void... arg0) {
+			mAudioRecordRunnable.run();
+			return null;
+		}
+		
+		@Override
+		protected void onPreExecute() {
+			mRunAudioThread = true;
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+		}
+	}
+	
+	class AsyncStopRecording extends AsyncTask<Void,Integer,Void>{
+
+		@Override
+		protected Void doInBackground(Void... arg0) {
+			return null;
+		}
+		
+		@Override
+		protected void onPreExecute() {
+			mRunAudioThread = false;
+			mRunVideoThread = false;
+			//mRunTimerThread = false;
+			
+			//updateTimer(getResources().getString(R.string.record_zero_time));
+			//mRecordTimerLayout.setVisibility(View.GONE);
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			recorderStatus = Constants.kCameraPreviewing;
+		}
+	}
+	
+	class EditLiveName {
+		private Dialog mDialog;
+		private Button mConfirmButton;
+		private EditText mLiveName;
+		
+		public EditLiveName(Context context) {
+			getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+
+			mDialog = new Dialog(context, R.style.dialog);
+			mDialog.setContentView(R.layout.dialog_edit_live_name);
+			
+			mLiveName = (EditText)mDialog.findViewById(R.id.live_name_textview);
+			mLiveName.setText(OupaiLivingActivity.this.mLiveName);
+			mLiveName.setFocusableInTouchMode(true);
+			mLiveName.setFocusable(true);
+			mLiveName.requestFocus();
+			Timer timer = new Timer();
+			timer.schedule(new TimerTask() {
+				@Override
+				public void run() {
+					InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+					imm.showSoftInput(mLiveName, InputMethodManager.RESULT_SHOWN);
+					imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.SHOW_IMPLICIT);
+				}
+			}, 300);
+			
+			mConfirmButton = (Button)mDialog.findViewById(R.id.live_name_confirm_btn);
+			mConfirmButton.setOnClickListener(new OnClickListener() {
+				
+				@Override
+				public void onClick(View arg0) {
+					updateLiveName(mLiveName.getText().toString());
+					
+					InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+					imm.hideSoftInputFromWindow(mLiveName.getWindowToken(), InputMethodManager.HIDE_IMPLICIT_ONLY);
+					
+					mDialog.dismiss();
+				}
+			});
+		}
+		
+		public void show() {
+			mDialog.show();
+		}
+	}
+	
+	 public void startPhotoZoom(Uri uri, Uri outUri) {    
+         if(uri !=null ){  
+	         Intent intent = new Intent("com.android.camera.action.CROP");    
+	         intent.setDataAndType(uri, "image/*");    
+	         intent.putExtra("crop", "true");    
+	         intent.putExtra("aspectX", 16);
+	         intent.putExtra("aspectY", 9);        
+	         intent.putExtra("outputX", 320);    
+	         intent.putExtra("outputY", 180);    
+	         intent.putExtra("scale", true);
+	         intent.putExtra(MediaStore.EXTRA_OUTPUT, outUri);
+	         intent.putExtra("return-data", false);    
+	         intent.putExtra("outputFormat", Bitmap.CompressFormat.JPEG.toString());
+	         intent.putExtra("noFaceDetection", true);
+	         startActivityForResult(intent, Constants.kRequestCropResult);    
+         }
+     }
+	
+//	 
+//	 public void displayYUVData(byte[] data, int width, int height) {
+//		 byte[] uvdata = Arrays.copyOfRange(data, width*height, data.length);
+//		 mGLLiveRenderer.update(data, uvdata);
+////		 ByteArrayOutputStream out = new ByteArrayOutputStream();
+////		 YuvImage yuvImage = new YuvImage(data, ImageFormat.NV21, width, height, null);
+////		 yuvImage.compressToJpeg(new Rect(0, 0, width, height), 50, out);
+////		 byte[] imageBytes = out.toByteArray();
+////		 Bitmap image = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+//////		 iv.setImageBitmap(image);
+////		 
+////		 
+////		 
+////		 if(renderSurfaceView != null) {
+////			 Bitmap resizeBitmap = Bitmap.createScaledBitmap(image, screenWidth, (int)((screenWidth/16.f)* 9.f), false);
+////			 
+////			 Canvas canvas = renderSurfaceHolder.lockCanvas(null);
+////			 canvas.drawBitmap(resizeBitmap, 0, 0, null);
+////			 renderSurfaceHolder.unlockCanvasAndPost(canvas);
+////			 
+////			 resizeBitmap.recycle();
+////			 resizeBitmap = null;
+////		 }
+////
+////		 image.recycle();
+////		 image = null;
+//	 }
+	 
+	 @Override  
+	 protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+	        if (resultCode != RESULT_CANCELED) {  
+	        	switch (requestCode) {  
+	            case Constants.kRequestCameraResult:  
+	                if (android.os.Environment.getExternalStorageState().equals(  
+	                	    android.os.Environment.MEDIA_MOUNTED)) {  
+	                    File tempFile = new File(Environment.getExternalStorageDirectory(), Constants.kVideoThumbFilename);
+	                    mSnackbar.setCustomThumb(Environment.getExternalStorageDirectory()+File.separator+Constants.kVideoThumbFilename);
+	                    startPhotoZoom(Uri.fromFile(tempFile), Uri.fromFile(tempFile));
+	                } else {  
+	                    Toast.makeText(this, getResources().getString(R.string.alert_no_sd_card), Toast.LENGTH_LONG).show();
+	                }
+	  
+	                break;  
+	            case Constants.kRequestAlbumResult:
+	            	if (android.os.Environment.getExternalStorageState().equals(  
+	                	    android.os.Environment.MEDIA_MOUNTED)) { 
+	            		File tempFile = new File(Environment.getExternalStorageDirectory(), Constants.kVideoThumbFilename);
+	            		mSnackbar.setCustomThumb(Environment.getExternalStorageDirectory()+File.separator+Constants.kVideoThumbFilename);
+	            		startPhotoZoom(data.getData(), Uri.fromFile(tempFile));
+	            	}
+	            	else {
+	            		Toast.makeText(this, getResources().getString(R.string.alert_no_sd_card), Toast.LENGTH_LONG).show();
+	            	}
+	            	break;
+	            case Constants.kRequestCropResult:  
+//	            	if(resultCode >= 0)
+	            		mSnackbar.updateCustomThumbUI();
+	               
+	                break;
+	        	}
+	        }
+	 }
+	 
+	 public void syncSettings()
+	 {
+		 if(mLiveName!=null && mLiveName.equalsIgnoreCase(mSnackbar.getLiveName()))
+			 return;
+		 
+		 if(mSnackbar.getLiveName().equalsIgnoreCase(""))
+			 return;
+		 
+		 mLiveName = mSnackbar.getLiveName();
+		 mTitleView.setText(mLiveName);
+		 
+		 if(mServiceInited) {
+			 new HTTPSubmitLivingTitleDaemon(httpHandler, 0, 0).startHttpRequest(mStartLiveEntity.mLinkID, mLiveName);
+		 }
+	 }
+
+
+	@Override
+	public void onDismiss(ActionSheet actionSheet, boolean isCancel) {
+		
+	}
+
+
+	@Override
+	public void onOtherButtonClick(ActionSheet actionSheet, int index) {
+		if(actionSheet.getTag().equalsIgnoreCase("StopLiveTag")) {
+			if(index >= 2) {
+				return;
+			}
+			new HTTPAppDevStopLiveDaemon(httpHandler, OPPlayerActivity.HTTP_APPDEVSTOPLIVE_OKK, OPPlayerActivity.HTTP_APPDEVSTOPLIVE_ERR)
+			.startHttpRequest(mStartLiveEntity.mLinkID, (index==0?true:false), true);
+			
+			mainActivity.finish();
+		}
+	}
+	
+	private void  createLivingBrokenDlg(int string_res_id) {
+		View view = LayoutInflater.from(OupaiLivingActivity.this).inflate(R.layout.living_broken_dialog,  null);
+		TextView tv_text = (TextView)view.findViewById(R.id.dialog_text);
+		TextPaint tp = tv_text.getPaint(); 
+		tp.setFakeBoldText(true); 
+		tv_text.setText(string_res_id);
+		TextView tv_ok = (TextView)view.findViewById(R.id.dialog_ok);
+		tp = tv_ok.getPaint(); 
+		tp.setFakeBoldText(true);
+		final Dialog dialog = new Dialog(OupaiLivingActivity.this, R.style.LivingBrokenDlg);
+		//final Dialog dialog = new Dialog(OupaiLivingActivity.this);
+		dialog.setContentView(view);
+		dialog.setCancelable(false);
+		//dialog.setCancelable(view, 0, 0, 0, 0);
+		//AlertDialog.Builder builder = new AlertDialog.Builder(OupaiLivingActivity.this);
+		//builder.set
+		//final AlertDialog dialog = builder.create();
+		//dialog.setCanceledOnTouchOutside(false);
+		//dialog.setView(view, 0, 0, 0, 0);
+		dialog.show();
+	
+		tv_ok.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				dialog.dismiss();
+				new HTTPAppDevStopLiveDaemon(httpHandler, OPPlayerActivity.HTTP_APPDEVSTOPLIVE_OKK, OPPlayerActivity.HTTP_APPDEVSTOPLIVE_ERR)
+				.startHttpRequest(mStartLiveEntity.mLinkID, true, true);
+				
+				mainActivity.finish();
+			}
+		});
+	}
+}

@@ -1,0 +1,176 @@
+package com.oupai.http;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import com.oupai.misc.Constants;
+import com.oupai.net.HttpRequest;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+
+import android.os.Handler;
+import android.os.Message;
+
+public class HTTPUserWatchingLivingRequestDaemon implements Runnable {
+	private Handler msgHandler = null;
+	private String userName = null;
+	private String sessionid = null;
+	private String reqResult = null;
+	private int msgWhatOK = 0;
+	private int msgWhatErr = 0;
+	private boolean isRunning = false;
+	
+	public String video_id;
+	public String video_title;
+	public int video_watch_count;
+	public int video_like_count;
+	public int video_comment_count;
+	public String video_thumb;
+	public int video_start_live_time;
+	public int video_stop_live_time;
+	public String uname;
+	public String display_name;
+	public String user_thumb;
+	public double gps_latitude;
+	public double gps_longitude;
+	public String video_desc;
+	public String video_type;
+	public int watchid;
+	public int video_watching_count;
+	public int storage;
+	public int release;
+	public int isliving;
+	public int like_flag;
+	public double distance;
+	public int gps_flag;
+	
+	public String protocol;
+	
+	public String srchost;
+	public int srcport;
+	public String exkey;
+	
+	public String fileurl;
+	
+	
+	public String devid;
+	
+	public String linkID;
+	
+	public int followed_flag;
+	public String city;
+	
+	public String errString = null;
+	
+	public String gps_x = null;
+	public String gps_y = null;
+
+	public HTTPUserWatchingLivingRequestDaemon(Handler handler,  int msgok, int msgerr, String gps_x, String gps_y)
+	{
+		this.msgHandler = handler;
+		msgWhatOK = msgok;
+		msgWhatErr = msgerr;
+		this.gps_x = gps_x;
+		this.gps_y = gps_y;
+	}
+
+
+	@Override
+	public void run() {
+		// TODO Auto-generated method stub
+		isRunning = true;
+		Message msg = new Message();
+	
+		
+		if (httpSendRequest()) {
+			msg.what = this.msgWhatOK;
+		} else {
+			msg.what = this.msgWhatErr;
+		}
+		if (this.msgHandler != null) {
+			msgHandler.sendMessage(msg);
+		}
+		isRunning = false;
+	}
+
+	
+	public boolean httpSendRequest()
+	{
+		//baseUrl
+		String baseUrl = Constants.kServiceURL + Constants.kUserWatchLivingAPI + "linkid="+this.linkID+"&sessionid="+sessionid;
+		if(gps_x!=null && gps_y!=null) {
+			baseUrl += "&gps_latitude="+gps_x+"&gps_longitude="+gps_y;
+		}
+		this.reqResult = HttpRequest.doHttpGetRequest(baseUrl);
+		if (reqResult == null) {
+			return false;
+		}
+
+		try {
+			JSONObject rootObj = null;
+			rootObj = new JSONObject(reqResult);
+			
+			if ("ok".compareToIgnoreCase(rootObj.getString("retval")) != 0) {
+				errString = rootObj.getString("reterr");
+				AppSysTool.LogDebug("startVideoPlayer get Result is "+rootObj.getString("retval"));
+				return false;
+			}
+			
+			JSONObject retobj = rootObj.getJSONObject("retinfo");
+			
+			video_id = retobj.getString("video_id"); 
+			video_title = ""; 
+			video_watch_count = retobj.getInt("video_watch_count"); 
+			video_like_count = retobj.getInt("video_like_count"); 
+			video_comment_count = retobj.getInt("video_comment_count"); 
+			video_thumb = retobj.getString("video_thumb"); 
+			video_start_live_time = retobj.getInt("video_start_live_time");
+			video_stop_live_time = retobj.getInt("video_stop_live_time");
+			uname = retobj.getString("uname"); 
+			display_name = retobj.getString("display_name"); 
+			user_thumb = retobj.getString("user_thumb"); 
+			gps_latitude = retobj.getDouble("gps_latitude"); 
+			gps_longitude = retobj.getDouble("gps_longitude"); 
+			video_desc = retobj.getString("video_desc"); 
+			video_type = retobj.getString("video_type"); 
+			watchid = retobj.getInt("watchid"); 
+			video_watching_count = retobj.getInt("video_watching_count"); 
+			storage = retobj.getInt("storage"); 
+			release = retobj.getInt("release"); 
+			isliving = retobj.getInt("isliving"); 
+			protocol = retobj.getString("protocol"); 
+			like_flag = retobj.getInt("like_flag");
+			distance = retobj.getDouble("distance");
+			gps_flag = retobj.getInt("gps_flag");
+			
+			if ("amqp".equalsIgnoreCase(protocol)) {
+				srcport = retobj.getInt("srcport"); 
+				srchost = retobj.getString("srchost"); 
+				exkey = retobj.getString("exkey"); 
+			} else if ("http".equalsIgnoreCase(protocol)) {
+				fileurl = retobj.getString("fileurl"); 
+			}
+
+			devid = retobj.getString("devid"); 
+			followed_flag = retobj.getInt("followed_flag"); 
+			city = retobj.getString("city"); 
+
+		} catch (JSONException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+			 AppSysTool.LogDebug("httpClient.execute(getMethod) format "+reqResult); 
+			return false;
+		} 
+		
+		return true;
+	}
+
+	public void startHttpRequest(String uname, String linkid, String sessionid)
+	{
+		if (this.isRunning == false) {
+			userName = uname;
+			linkID = linkid;
+			this.sessionid = sessionid;
+			new Thread(this).start();
+		}
+	}
+}

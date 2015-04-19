@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent"
+     android:background="@color/color_grey_bkg"
+     android:orientation="vertical" >
+     
+	<include layout="@layout/simple_title"/>
+
+     <LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:background="@color/white"
+		android:layout_marginTop="20dp"
+		android:orientation="vertical">
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="1dip"
+			android:background="@color/color_1px_divider">
+	 	</LinearLayout>
+	    <RelativeLayout
+	        android:id="@+id/myHeadLyt"
+	        android:background="@color/color_white"
+	        android:layout_width="match_parent"
+	        android:layout_height="50dp">
+	        <TextView
+	            android:layout_width="wrap_content"
+	            android:layout_height="wrap_content"
+	            android:singleLine="true"
+	            android:layout_alignParentLeft="true"
+	            android:paddingTop="15dp"
+	            android:paddingBottom="10dp"
+	            android:paddingLeft="10dp"
+	            android:text="@string/myhead"
+	            android:textColor="@color/color_text_in_personal_info"
+	            android:textSize="15sp" />
+	            <com.oupai.view.CircularImage
+	                android:id="@+id/myHeadImg"
+	                android:layout_width="40dip"
+	                android:layout_height="40dip"
+	                android:layout_alignParentRight="true"
+	                android:layout_marginTop="5dp"
+	                android:layout_marginRight="10dip"
+	                android:background="@drawable/icon_user"
+	                android:singleLine="true"/>
+	    </RelativeLayout>
+		<LinearLayout
+	     	android:layout_width="fill_parent"
+	        android:layout_height="1dip"
+	        android:layout_marginLeft="10dp"
+	        android:background="@color/color_grey_bkg">
+		</LinearLayout>		 
+	    <RelativeLayout
+	        android:id="@+id/myNameLyt"
+	        android:background="@color/color_white"
+	        android:layout_width="match_parent"
+	        android:layout_height="50dp">	           
+	        <TextView
+	            android:layout_width="wrap_content"
+	            android:layout_height="wrap_content"
+	            android:singleLine="true"
+	            android:layout_alignParentLeft="true"
+	            android:paddingTop="15dp"
+	            android:paddingBottom="10dp"
+	            android:paddingLeft="10dp"
+	            android:text="@string/myname"
+	            android:textColor="@color/color_text_in_personal_info"
+	            android:textSize="15sp" />
+	            <ImageView
+	               android:id="@+id/myNameImg"
+	               android:layout_width="40dip"
+	               android:layout_height="40dip"
+	               android:layout_marginTop="5dp"
+	               android:background="@drawable/line_icon_arrow"
+	               android:layout_alignParentRight="true"
+	               android:paddingRight="10dp"
+	               android:visibility="gone"/>
+	           <TextView
+	               android:id="@+id/myNameText"
+	               android:layout_toLeftOf="@+id/myNameImg"
+	               android:layout_alignParentRight="true"
+	               android:layout_width="wrap_content"
+	               android:layout_height="wrap_content"
+	               android:paddingRight="10dp"
+	               android:paddingTop="15dp"
+	               android:paddingBottom="10dp"
+	               android:textColor="#00b0dc"
+	               android:textSize="15sp" />
+	     </RelativeLayout>
+	     
+		<LinearLayout
+	     	android:layout_width="fill_parent"
+	        android:layout_height="1dip"
+	        android:layout_marginLeft="10dp"
+	        android:background="@color/color_grey_bkg">
+		 </LinearLayout>
+	     <RelativeLayout
+	           android:id="@+id/myAccountLyt"
+	           android:background="@color/color_white"
+	           android:layout_width="match_parent"
+	           android:layout_height="50dp">
+	
+	           <TextView
+	               android:id="@+id/account_text_id"
+	               android:layout_width="wrap_content"
+	               android:layout_height="wrap_content"
+	               android:layout_alignParentLeft="true"
+	               android:paddingBottom="10dp"
+	               android:paddingLeft="10dp"
+	               android:paddingTop="15dp"
+	               android:singleLine="true"
+	               android:text="@string/account"
+	               android:textColor="@color/color_text_in_personal_info"
+	               android:textSize="15sp" />
+	
+	           <TextView
+	               android:id="@+id/myAccountText"
+				   android:layout_alignParentRight="true"
+	               android:layout_width="wrap_content"
+	               android:layout_height="wrap_content"
+	               android:paddingRight="14dp"
+	               android:paddingTop="15dp"
+	               android:paddingBottom="10dp"
+				   android:layout_marginLeft="10dp"
+	               android:maxLines="1"
+	               android:lines="1"
+	               android:singleLine="true"
+	               android:textColor="#00b0dc"
+	               android:textSize="15sp" />
+	     </RelativeLayout>
+	
+		<LinearLayout
+	     	android:layout_width="fill_parent"
+	        android:layout_height="1dip"
+	        android:layout_marginLeft="10dp"
+	        android:background="@color/color_grey_bkg">
+
+		 </LinearLayout>
+		 
+	     <RelativeLayout
+	           android:id="@+id/mySignatureLyt"
+	           android:background="@color/color_white"
+	           android:layout_width="match_parent"
+	           android:layout_height="50dp">
+	
+	           <TextView
+				   android:id="@+id/signature_text_id"
+	               android:layout_width="wrap_content"
+	               android:layout_height="wrap_content"
+	               android:layout_alignParentLeft="true"
+	               android:paddingBottom="10dp"
+	               android:paddingLeft="10dp"
+	               android:paddingTop="15dp"
+	               android:singleLine="true"
+	               android:text="@string/signature"
+	               android:textColor="@color/color_text_in_personal_info"
+	               android:textSize="15sp" />
+	
+	            <ImageView
+	               android:id="@+id/mySignatureImg"
+	               android:layout_width="40dip"
+	               android:layout_height="40dip"
+	               android:layout_marginTop="5dp"
+	               android:background="@drawable/line_icon_arrow"
+	               android:layout_alignParentRight="true"
+	               android:paddingRight="10dp"
+	               android:visibility="gone"/>
+	            
+	           <TextView
+	               android:id="@+id/SignagureText"
+	               android:layout_alignParentRight="true"
+	               android:layout_width="wrap_content"
+	               android:layout_height="wrap_content"
+	               android:layout_marginLeft="50dp"
+	               android:paddingRight="10dp"
+	               android:paddingTop="15dp"
+	               android:singleLine="true"
+	               android:maxLines="1"
+	               android:ellipsize="end"
+	               android:paddingBottom="10dp"
+	               android:textColor="#00b0dc"
+	               android:textSize="15sp" />
+	     </RelativeLayout>
+
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="1dip"
+			android:background="@color/color_1px_divider">
+	 	</LinearLayout>
+	</LinearLayout>
+	
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:background="@color/white"
+		android:layout_marginTop="20dp"
+		android:orientation="vertical">
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="1dip"
+			android:background="@color/color_1px_divider">
+	 	</LinearLayout>
+        <RelativeLayout
+            android:id="@+id/myGenderLyt"
+            android:background="@color/color_white"
+            android:layout_width="match_parent"
+            android:layout_height="50dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:layout_alignParentLeft="true"
+                android:paddingTop="15dp"
+                android:paddingBottom="10dp"
+                android:paddingLeft="10dp"
+                android:text="@string/gender"
+                android:textColor="@color/color_text_in_personal_info"
+                android:textSize="15sp" />
+            <TextView
+                android:id="@+id/myGenderText"
+			    android:layout_alignParentRight="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingRight="10dp"
+                android:paddingTop="15dp"
+                android:paddingBottom="10dp"
+                android:text="@string/female"
+                android:textColor="@color/color_text_value_in_personal_info"
+                android:textSize="15sp" />
+        </RelativeLayout>
+	    <LinearLayout
+     	    android:layout_width="fill_parent"
+            android:layout_height="1dip"
+            android:layout_marginLeft="10dp"
+            android:background="@color/color_grey_bkg">
+	    </LinearLayout>
+        <RelativeLayout
+            android:id="@+id/myLocaLyt"
+            android:background="@color/color_white"
+            android:layout_marginTop="1dp"
+            android:layout_width="match_parent"
+            android:layout_height="50dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:layout_alignParentLeft="true"
+                android:paddingTop="15dp"
+                android:paddingBottom="10dp"
+                android:paddingLeft="10dp"
+                android:text="@string/local"
+                android:textColor="@color/color_text_in_personal_info"
+                android:textSize="15sp" />
+            <TextView
+                android:id="@+id/myLocaText"
+			    android:layout_alignParentRight="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingRight="14dp"
+                android:paddingTop="15dp"
+                android:paddingBottom="10dp"
+                android:text="@string/china"
+                android:textColor="@color/color_text_value_in_personal_info"
+                android:textSize="15sp" />
+        </RelativeLayout>
+     	<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="1dip"
+			android:background="@color/color_1px_divider">
+	 	</LinearLayout>
+    </LinearLayout>
+    
+    <LinearLayout
+        android:id="@+id/logout_layout_id"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="bottom">
+        <TextView
+            android:id="@+id/exitLogin"
+            android:layout_width="fill_parent"
+            android:layout_height="50dp"
+            android:layout_alignParentBottom="true"
+            android:background="#00b0dc"
+            android:gravity="center"
+            android:singleLine="true"
+            android:text="@string/exit"
+            android:textColor="@color/color_white"
+            android:textSize="15sp" />
+    </LinearLayout>
+    
+</LinearLayout>

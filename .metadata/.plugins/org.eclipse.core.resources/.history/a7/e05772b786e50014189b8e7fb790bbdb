@@ -1,0 +1,296 @@
+package com.oupai.activity;
+
+import java.net.URLEncoder;
+import java.security.NoSuchAlgorithmException;
+
+import android.app.Activity;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.ccvideo.R;
+import com.oupai.entity.CCVideoResetPasswordEntity;
+import com.oupai.entity.UserRegisterEntity;
+import com.oupai.misc.AppSysEnv;
+import com.oupai.misc.Constants;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+
+public class CCVideoVerifiedActivity extends Activity {
+	
+	private int mVerifiedType = Constants.kRegisterTypeRegister;
+	private String mCountryID = null;
+	private String mMobileNumber = null;
+	
+	private TextView mTitleTextView = null;
+	private TextView mRegister = null;
+	private TextView mResetPassword = null;
+	private ImageView back=null;
+	
+	private RelativeLayout mRegisterLayout = null;
+	private RelativeLayout mResetPasswdLayout = null;
+	
+	private String mNickname = null;
+	private String mPassword = null;
+	
+	private ProgressDialog mProgressDialog = null;
+	
+	private UserRegisterEntity mEntity = null;
+	private CCVideoResetPasswordEntity mResetPasswordEntity = null;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_verified_layout);
+
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		Bundle bundle = this.getIntent().getExtras();
+		mVerifiedType = bundle.getInt("verifiedType");
+		mMobileNumber = bundle.getString("phoneNumber");
+//		mCountryID = bundle.getString("countrycode");
+		back=(ImageView) findViewById(R.id.return_btn_id);
+		back.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				finish();
+				
+			}
+		});
+		initViews();
+		initListeners();
+		initData();
+	}
+	
+	private void initViews()
+	{
+		mRegisterLayout = (RelativeLayout)findViewById(R.id.register_section_id);
+		mResetPasswdLayout = (RelativeLayout)findViewById(R.id.reset_passwd_section_id);
+		
+		mTitleTextView = (TextView)findViewById(R.id.title_id);
+		if(mVerifiedType == Constants.kRegisterTypeRegister) {
+			mTitleTextView.setText("◊¢≤·");
+			mRegisterLayout.setVisibility(View.VISIBLE);
+			mResetPasswdLayout.setVisibility(View.GONE);
+		}
+		else if(mVerifiedType == Constants.kRegisterTypeResetPassword) {
+			mTitleTextView.setText("’“ªÿ√‹¬Î");
+			mRegisterLayout.setVisibility(View.GONE);
+			mResetPasswdLayout.setVisibility(View.VISIBLE);
+		}
+		
+		mRegister = (TextView)findViewById(R.id.register_button_id);
+		mResetPassword = (TextView)findViewById(R.id.reset_passwd_id);
+	}
+	//÷ÿ÷√√‹¬Î
+	private void resetPassword() {
+		mPassword = (String)((EditText)findViewById(R.id.reset_pwd_password_id)).getText().toString().trim();
+		if(mPassword==null || mPassword.length()<=4 || mPassword.length()>=16) {
+			Toast.makeText(this, R.string.invalid_passwd_str2, Toast.LENGTH_LONG).show();
+			return;
+		}
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kResetPasswordAPI);
+		stb.append("&phone=" + mMobileNumber);
+		try {
+			stb.append("&password=" + Utils.getInstance().getMD5(mPassword));
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_RESET_PASSWORD);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(mProgressDialog);
+					return;
+				}
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_RESET_PASSWORD || netData==null)
+					return;
+				
+				if(mProgressDialog != null)
+					mProgressDialog.dismiss();
+				
+				mResetPasswordEntity = (CCVideoResetPasswordEntity)netData;
+				
+				if (mResetPasswordEntity.mRetVal == null) {
+					Toast.makeText(CCVideoVerifiedActivity.this, R.string.network_issue_toast, Toast.LENGTH_SHORT).show();
+					return;
+				}
+				
+				if(mResetPasswordEntity.mRetVal.equalsIgnoreCase("ok")) {
+					Toast.makeText(CCVideoVerifiedActivity.this, R.string.reset_password_succ_text, Toast.LENGTH_LONG).show();
+					resetSuccAction();
+				}
+				else {
+					Toast.makeText(CCVideoVerifiedActivity.this, mEntity.mRetErr, Toast.LENGTH_LONG).show();
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void registerUser() throws NoSuchAlgorithmException
+	{
+		mNickname = (String)((EditText)findViewById(R.id.nickname_input_id)).getText().toString().trim();
+		mPassword = (String)((EditText)findViewById(R.id.password_edittext_id)).getText().toString().trim();
+		
+		if(mNickname==null || mNickname.equalsIgnoreCase("") || mPassword==null || mPassword.equalsIgnoreCase("")) {
+			Toast.makeText(this, R.string.error_empty_user_or_pass_str, Toast.LENGTH_LONG).show();
+			return;
+		}
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUserRegisterUserAPI);
+		stb.append("&phone=" + mMobileNumber);
+		stb.append("&paswd=" + Utils.getInstance().getMD5(mPassword));
+		stb.append("&dname=" + URLEncoder.encode(mNickname));
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+
+		stb.append("&push_id=" + Utils.getInstance().getPushID());
+		stb.append("&channel_id=" + Utils.getInstance().getChannelID());
+		stb.append("&app_id=" + Utils.getInstance().getAppID());
+		stb.append("&dev_token=" + com.oupai.misc.Utils.getDeviceId(this));
+		
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_REGISTER_USER);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(mProgressDialog);
+					return;
+				}
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_REGISTER_USER || netData==null)
+					return;
+				
+				if(mProgressDialog != null)
+					mProgressDialog.dismiss();
+				
+				mEntity = (UserRegisterEntity)netData;
+				
+				if (mEntity.mRetVal == null) {
+					Toast.makeText(CCVideoVerifiedActivity.this, R.string.network_issue_toast, Toast.LENGTH_SHORT).show();
+					return;
+				}
+				
+				if(mEntity.mRetVal.equalsIgnoreCase("ok")) {
+					Toast.makeText(CCVideoVerifiedActivity.this, R.string.register_succ_text, Toast.LENGTH_LONG).show();
+					loginSuccAction();
+				}
+				else {
+					Toast.makeText(CCVideoVerifiedActivity.this, mEntity.mRetErr, Toast.LENGTH_LONG).show();
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void resetSuccAction()
+	{
+		returnAutoLoginAction();
+	}
+	
+	private void loginSuccAction()
+	{
+		saveUserInfo();
+		returnAutoLoginAction();
+	}
+	
+	private void saveUserInfo() {
+		SharedPreferences sp = getSharedPreferences(AppSysEnv.APPSYS_LOCAL_DBFILE, Context.MODE_WORLD_WRITEABLE);
+		sp.edit().putInt(AppSysEnv.APPSYS_LOGIN_TYPE, Constants.kLoginTypeOupai).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_ACCOUNT_KEYSTR, mEntity.mUname).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PASSWORD_KEYSTR, mPassword).commit();
+		
+		try {
+			sp.edit().putString(AppSysEnv.APPSYS_PASSWORD_MD5_KEYSTR, Utils.getInstance().getMD5(mPassword)).commit();
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		sp.edit().putString(AppSysEnv.APPSYS_SESSION_ID, mEntity.mSessionID).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_ICONURL, mEntity.mLogoURL).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_DNAME, mEntity.mDname).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_STOREPASSWORD_KEYSTR, true).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_AUTOLOGIN_KEYSTR, true).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_EMAIL_KEYSTR, mEntity.mEmail).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PHONE_KEYSTR, mEntity.mPhone).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_WEIXIN_KEYSTR, mEntity.mWeixin).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_GENDER, mEntity.mGender).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_TOKEN, "").commit();
+	}
+	
+	private void returnAutoLoginAction() {
+		Intent intent = this.getIntent();
+		intent.putExtra("actionType", LoginActivity.kActionIgnore);
+		this.setResult(RESULT_OK, intent);
+		finish();
+	}
+	
+	private void initListeners()
+	{
+		mRegister.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				try {
+					registerUser();
+				} catch (NoSuchAlgorithmException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		
+		mResetPassword.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				resetPassword();
+			}
+		});
+	}
+	
+	private void initData()
+	{
+		
+	}
+}

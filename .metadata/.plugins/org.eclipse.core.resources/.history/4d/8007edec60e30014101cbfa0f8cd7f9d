@@ -1,0 +1,130 @@
+package com.oupai.view;
+
+import io.vov.utils.Log;
+
+import java.util.List;
+
+import com.ccvideo.R;
+import com.oupai.activity.CCVideoSquareActivity;
+import com.oupai.adapter.SquareVideoAdapter;
+import com.oupai.entity.LivingEntity;
+import com.oupai.fragment.ActionSheet;
+
+import android.app.Activity;
+import android.content.Context;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.LinearLayout.LayoutParams;
+
+public class SquarePageLayout extends LinearLayout implements ILayout, View.OnFocusChangeListener, View.OnClickListener {
+	private Context mContext;
+	private View warning;
+	private boolean isShowWarning = false;
+	private RefreshListView mViewListview = null;
+	private SquareVideoAdapter mVideoAdapter = null;
+	private TextView  mFilterResults;
+
+	public SquarePageLayout(Context context) {
+		super(context);
+		mContext = context;
+	}
+
+	@Override
+	public void onClick(View arg0) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void onFocusChange(View arg0, boolean arg1) {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void initListener() {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public void initView() {
+		// TODO Auto-generated method stub
+		setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.MATCH_PARENT));
+		setGravity(1);
+		setOrientation(1);
+		addView(LayoutInflater.from(mContext).inflate(R.layout.activity_square_layout, null));
+		warning =  findViewById(R.id.square_living_tips_id);
+		mViewListview = (RefreshListView)findViewById(R.id.discover_living_listview_id);
+		mFilterResults = (TextView)findViewById(R.id.filter_result_id);
+		mFilterResults.setOnClickListener(new OnClickListener() {			
+			@Override
+			public void onClick(View arg0) {
+				showFilterActionSheet();
+
+				//filterDialog.show();
+			}
+	    });
+		
+	}
+
+	
+	private void showFilterActionSheet() {
+		ActionSheet.createBuilder(mContext, ((CCVideoSquareActivity)mContext).getSupportFragmentManager())
+				   .setCancelButtonTitle(R.string.cancel_str)
+				   .setOtherButtonTitles(
+						   getResources().getString(R.string.filter_all),
+						   getResources().getString(R.string.filter_only_male),
+						   getResources().getString(R.string.filter_only_female),
+						   getResources().getString(R.string.filter_custom))
+				   .setTag("FilterSource")
+				   .setCancelableOnTouchOutside(true).setListener((CCVideoSquareActivity)mContext).show();
+		Log.i("info", "showFilterActionSheet---------------------->");
+	}
+	
+	public void startShowWarning() {
+		/*
+		if (this.isShowWarning) {
+			warning.setVisibility(View.VISIBLE);
+		} else {
+			warning.setVisibility(View.INVISIBLE);
+		} */
+	}
+	
+	public void stopShowWarning() {
+		warning.setVisibility(View.INVISIBLE);
+		isShowWarning = false;
+		Log.i("info", "stopShowWarning---------------------->");
+	}
+
+	public void initAdapters(List<LivingEntity> livingItems) 
+	{
+		Log.i("info", "initAdapters---------------------->");
+		mVideoAdapter = new SquareVideoAdapter((Activity)mContext);
+		mVideoAdapter.setData(livingItems);
+		mViewListview.setAdapter(mVideoAdapter);
+		mVideoAdapter.setListView(mViewListview);
+		mViewListview.setListViewListener((CCVideoSquareActivity)mContext);
+		mViewListview.setPullLoadEnable(false);
+	}
+	
+	public void notifyDataSetChanged() {
+		mVideoAdapter.notifyDataSetChanged();
+	}
+	
+	public void stopRefresh() {
+		mViewListview.stopRefresh();
+	}
+	
+	public void stopLoadMore() {
+		mViewListview.stopLoadMore();
+	}
+
+	public void setmFilter(boolean is) {
+		if (is) {
+			mFilterResults.setText(R.string.filter_str);
+		} else {
+			mFilterResults.setText(R.string.filtered_str);
+		}
+	}
+}

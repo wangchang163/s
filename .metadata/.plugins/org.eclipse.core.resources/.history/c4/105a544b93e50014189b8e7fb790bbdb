@@ -1,0 +1,217 @@
+package com.oupai.adapter;
+
+import java.util.List;
+
+import com.ccvideo.R;
+import com.cloudfocus.opplayer.OPPlayerActivity;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+import com.oupai.activity.OtherPageActivity;
+import com.oupai.activity.OwnPageActivity;
+import com.oupai.entity.LivingEntity;
+import com.oupai.misc.Utils;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.util.DisplayMetrics;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup.LayoutParams;
+import android.widget.BaseAdapter;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.TextView;
+
+public class SquareVideoAdapter extends BaseAdapter {
+    private ListView mListview;
+    //public SquareVideoListEntity mEntity = new SquareVideoListEntity();
+    private LayoutInflater inflater;
+    private Activity mContext;
+    private List<LivingEntity> mEntities;
+    private String mActionUserName;
+    
+    public SquareVideoAdapter(Activity context) {
+    	mContext = context;
+    	inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+    	this.mActionUserName = Utils.getInstance().getUsername(mContext);
+    }
+    
+    public void setData(List<LivingEntity> data) {
+    	mEntities = data;
+    }
+    
+	@Override
+	public int getCount() {
+		return mEntities.size();
+	}
+
+	@Override
+	public Object getItem(int arg0) {
+		return mEntities.get(arg0);
+	}
+
+	@Override
+	public long getItemId(int arg0) {
+		return arg0;
+	}
+
+    private OnClickListener mUserLogoClickListener = new OnClickListener() {
+        @Override
+        public void onClick(View view) {
+        	final int position = mListview.getPositionForView(view)-1;
+    		if (position >= 0 && position < mEntities.size()) {
+    			LivingEntity entity = mEntities.get(position);
+    			Intent intent = null;
+				//Intent intent = new Intent(mContext, OwnPageActivity.class);
+				Bundle b = new Bundle();
+				b.putString("uname", entity.uname);
+				b.putString("userDName", entity.display_name);
+				b.putString("sessionID", Utils.getInstance().getSessionID(mContext));
+				if (mActionUserName == null) {
+					intent = new Intent(mContext, OtherPageActivity.class);
+					//b.putBoolean("showcurrentuser", false);
+					b.putInt("followFlag", entity.followed_flag);
+				} else if (mActionUserName.equals(entity.uname)) {
+					intent = new Intent(mContext, OwnPageActivity.class);
+					//b.putBoolean("showcurrentuser", true);
+				} else {
+					intent = new Intent(mContext, OtherPageActivity.class);
+					//b.putBoolean("showcurrentuser", false);
+					b.putInt("followFlag", entity.followed_flag);
+				}
+				intent.putExtras(b);
+				mContext.startActivity(intent);
+    		}
+        }
+    };
+    
+    public void setListView(ListView listview) {
+    	mListview = listview;
+    }
+
+    private OnClickListener mWatchingClickListener = new OnClickListener() {
+        @Override
+        public void onClick(View view) {
+        	final int position = mListview.getPositionForView(view)-1;
+    		if(position>=0 && position<mEntities.size()) {
+    			LivingEntity entity = mEntities.get(position);
+    			
+    			Intent intent = new Intent(mContext, OPPlayerActivity.class);
+
+    			Bundle b = new Bundle();
+    			b.putString("linkid", entity.video_id);
+    			b.putInt("logid", entity.logid);
+    			b.putString("uname", mActionUserName);
+    			b.putString("oname", entity.uname);
+    			b.putString("video_title", "");
+    			b.putString("user_dname", entity.display_name);
+    			
+    			intent.putExtras(b);
+    				
+    			mContext.startActivity(intent);
+    		}	
+        }
+    };
+	
+	@Override
+	public View getView(int position, View convertView, ViewGroup group) {
+		ViewHolder holder = null;
+        if (convertView == null) {
+            holder = new ViewHolder();
+            convertView = inflater.inflate(R.layout.oupai_living_item_layout, null);
+            holder.logo = (ImageView) convertView.findViewById(R.id.living_item_logo_id);
+            holder.oname = (TextView) convertView.findViewById(R.id.living_item_name_id);
+            holder.gps = (TextView) convertView.findViewById(R.id.opplayer_user_gps_id);
+
+            holder.isliving = convertView.findViewById(R.id.live_status_id);
+            holder.livingPromptTextView = (TextView)convertView.findViewById(R.id.living_prompt_id);
+            holder.livingIcon = (ImageView)convertView.findViewById(R.id.living_icon);
+            holder.thumb = (ImageView) convertView.findViewById(R.id.living_item_thumb_id);
+            holder.title = (TextView) convertView.findViewById(R.id.living_item_title_id);
+            holder.comment = (TextView) convertView.findViewById(R.id.living_item_comment_count_id);
+            holder.watch = (TextView) convertView.findViewById(R.id.opplayer_watch_count_id);
+            holder.watching = (TextView) convertView.findViewById(R.id.watching_count_id);
+    		holder.like = (TextView) convertView.findViewById(R.id.living_item_like_count_id);
+    		
+            convertView.setTag(holder);
+        } else {
+            holder = (ViewHolder) convertView.getTag();
+        }
+		
+		LivingEntity entity = mEntities.get(position);
+		
+		if (entity == null) {
+	        AppSysTool.LogDebug("entity is null");
+			return null;
+		}
+        
+        DisplayMetrics dm = new DisplayMetrics();   
+        mContext.getWindowManager().getDefaultDisplay().getMetrics(dm);
+		
+		holder.logo.setOnClickListener(mUserLogoClickListener);
+		
+		try {
+			Utils.getInstance().imageLoader.displayImage(entity.user_thumb, holder.logo);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		
+		holder.oname.setText(entity.display_name);
+		//holder.gps.setText(entity.city);
+		holder.gps.setText(Utils.getInstance().getDistanceDesc(entity.distance, entity.gps_flag));
+		
+		//entity.isliving = 1;
+		if (entity.isliving == 0) {
+			holder.isliving.setVisibility(View.INVISIBLE);
+			holder.isliving.getLayoutParams().width = 0;
+			holder.isliving.getLayoutParams().height = 0;
+			
+			holder.livingIcon.setImageResource(R.drawable.icon_live_user_cam_end);
+			holder.livingPromptTextView.setText(Utils.getInstance().getVideoStartTimeDesc(entity.video_stop_live_time) + mContext.getResources().getString(R.string.live_end_str));
+		} else {
+			holder.isliving.setVisibility(View.VISIBLE);
+			holder.isliving.getLayoutParams().width = LayoutParams.WRAP_CONTENT;
+			holder.isliving.getLayoutParams().height = LayoutParams.WRAP_CONTENT;
+			
+			holder.livingIcon.setImageResource(R.drawable.icon_live_user_cam_online);
+			holder.livingPromptTextView.setText(Utils.getInstance().getVideoStartTimeDesc(entity.video_start_live_time) + mContext.getResources().getString(R.string.live_start_str));
+		}
+		
+		holder.thumb.getLayoutParams().width = dm.widthPixels;
+		holder.thumb.getLayoutParams().height = (dm.widthPixels / 16) *9;
+
+		try {
+			Utils.getInstance().imageLoader.displayImage(entity.video_thumb, holder.thumb);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		holder.thumb.setOnClickListener(mWatchingClickListener);
+		
+		holder.title.setText(entity.video_title);
+		holder.comment.setText(""+entity.video_comment_count);
+		holder.watch.setText(""+entity.video_watch_count);
+		holder.watching.setText(""+entity.video_watching_count);
+		holder.like.setText(""+entity.video_like_count);
+		
+        return convertView;
+	}
+
+    class ViewHolder {
+        public ImageView logo;
+        public TextView oname;
+        public TextView gps;
+        public View isliving;
+        public TextView livingPromptTextView;
+        public ImageView livingIcon;
+        public ImageView thumb;
+        public TextView title;
+        public TextView comment;
+        public TextView watch;
+        public TextView watching;
+        public TextView like;
+    }
+	
+}

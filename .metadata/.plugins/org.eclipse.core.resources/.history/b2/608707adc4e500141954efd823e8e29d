@@ -1,0 +1,229 @@
+package com.cloudfocus.opplayer.daemon;
+
+import java.nio.ByteBuffer;
+
+import com.appbase.JNIApi;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+import com.cloudfocus.opplayer.misc.BaseType;
+
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Bitmap.Config;
+import android.os.Handler;
+import android.os.Message;
+import android.view.SurfaceHolder;
+
+public class VideoPlayer {
+    private SurfaceHolder surfaceHolder = null;
+    
+    public boolean recvVideoPlayingMsg = false;
+    
+
+	private boolean landscapeOrientation = false;
+
+	private int rawVideoWidth = 0;
+    private int rawVideoHeight = 0;
+    private int displayVideoWidth = 704;
+    private int displayVideoHeight = 576;
+        
+    public int screenFullWidth = 704;
+    public int screenFullHeight = 576;
+    
+    private int displayLeftOffset = 0;
+    private int displayTopOffset = 0;
+    
+    private Paint rawPicPaint = null;
+    private ByteBuffer rawPicBuffer = null;
+    
+    private Bitmap rawBitmap = null;
+    private Bitmap resizeBitmap = null;
+    		
+	private float zoomSize = 1.0f;
+	
+	public int droprate = 0;
+	public int lossrate = 0;
+
+    public VideoPlayer(SurfaceHolder holder,  int sw, int sh) {
+    	surfaceHolder = holder;
+
+    	this.screenFullHeight = sh;
+    	this.screenFullWidth = sw;
+
+    }
+    
+    public void resizeFullScreenSize(int sw, int sh) {
+    	this.screenFullHeight = sh;
+    	this.screenFullWidth = sw;
+    	
+    	resizeDisplay();
+    }
+
+    public void resizeDisplay() {
+    	if (rawVideoHeight == 0 || rawVideoWidth == 0) {
+    		return;
+    	}
+
+    	this.displayVideoWidth = screenFullWidth;
+    	this.displayVideoHeight = screenFullWidth*rawVideoHeight/rawVideoWidth;
+    		
+    	this.displayLeftOffset = 0;
+    	this.displayTopOffset = 0;// ((screenFullHeight - this.displayVideoHeight)/2 > 0) ? ((screenFullHeight - this.displayVideoHeight)/2) : 0;
+    
+    	surfaceHolder.setFixedSize(displayVideoWidth, displayVideoHeight);
+    }
+
+    public void setRawVideoAttr(int width, int height)
+    {
+    	this.rawVideoHeight = height;
+        this.rawVideoWidth = width;
+        
+        resizeDisplay();
+        
+    	rawPicPaint = new Paint();
+    	rawPicPaint.setColor(Color.RED);
+    	
+
+        this.rawBitmap = Bitmap.createBitmap(this.rawVideoWidth, this.rawVideoHeight, Config.RGB_565);
+    }
+    
+    public void displayVideoOnSurfaceView(byte []rawVideoPixel) {
+    	Canvas canvas = this.surfaceHolder.lockCanvas(null);//��峰����诲��  
+    	
+        try {
+        	// Bitmap tmpBit = Bitmap.createBitmap(mPixel, 320, 480,
+        	// Bitmap.Config.RGB_565);//.ARGB_8888);
+        	if (this.rawBitmap == null || canvas == null) {
+        		AppSysTool.LogDebug("picBitmap is null or canvas is null");
+        		return;
+        	}
+        	
+        	this.rawPicBuffer = ByteBuffer.wrap(rawVideoPixel);
+
+        //AppSysTool.LogDebug("start to draw the bitmap");
+        //Log.d("PICBUFFER", "picbUffer size "+picBuffer.getLong()+"picbitmap size: "+this.picBitmap.getByteCount());
+        	rawPicBuffer.rewind();
+        this.rawBitmap.copyPixelsFromBuffer(rawPicBuffer);// makeBuffer(data565, N));
+        
+        //Log.d("PalmStar-Log", "recvVideoPlayingMsg is "+recvVideoPlayingMsg);
+        if (recvVideoPlayingMsg == false) {
+        	//Log.d("PalmStar-Log", "send playing message to handler");
+        	try {
+	        	recvVideoPlayingMsg = true;
+
+        		//Bitmap iconBitmap = Bitmap.createScaledBitmap(VideoBit, iconSize, iconSize, true);
+				//FileOutputStream fout = parentContext.openFileOutput(cameraID+".png", Context.MODE_PRIVATE);
+				//iconBitmap.compress(Bitmap.CompressFormat.PNG, 100, fout);
+				//fout.flush();
+				//fout.close();				
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+        } 
+        
+        //canvas.drawColor(Color.RED);
+        //canvas.drawARGB(255, 132, 130, 132);
+
+        //AppSysTool.LogDebug("RawVideoSize: "+this.rawVideoWidth+"x"+this.rawVideoHeight+" dispalySize: "+displayVideoWidth+"x"+displayVideoHeight);
+        resizeBitmap = Bitmap.createScaledBitmap(rawBitmap, this.displayVideoWidth, this.displayVideoHeight, false);
+
+        //resizeBitmap.
+        /*
+        AppSysTool.LogDebug("Kinds of size ("+this.rawVideoWidth+","+this.rawVideoHeight+"), ("+
+        		resizeBitmap.getWidth()+","+resizeBitmap.getHeight()+"), ("+
+        		this.screenFullWidth+","+this.screenFullHeight+"), ("+
+        		this.displayVideoWidth+","+this.displayVideoWidth+"), ("+
+        		canvas.getWidth()+","+canvas.getHeight()+")"+" "+displayLeftOffset+","+displayTopOffset);
+		*/
+        //if (this.landscapeOrientation) {
+        //	canvas.save();
+        //	canvas.rotate(90);
+        //}
+        canvas.drawBitmap(resizeBitmap, this.displayLeftOffset, this.displayTopOffset, null);
+
+        } catch (Exception e) {
+        	e.printStackTrace();
+        }
+        
+        this.surfaceHolder.unlockCanvasAndPost(canvas);
+        
+        resizeBitmap.recycle();
+        resizeBitmap = null;
+    }
+	
+	public int getPlayerWidth() {
+		return displayVideoWidth;
+	}
+	
+	public int getPlayerHeight() {
+		return displayVideoHeight;
+	}
+
+	public boolean isLandscapeOrientation() {
+		return landscapeOrientation;
+	}
+
+	public void setLandscapeOrientation(boolean landscapeOrientation) {
+		this.landscapeOrientation = landscapeOrientation;
+	}
+	
+	
+	public float getZoomSize() {
+		return this.zoomSize;
+	}
+
+	public void resetZoomSize() {
+		this.zoomSize = 1.0f;
+	}
+	
+	public void setZoomIn() {
+		if (this.zoomSize < 1.1f) {
+			this.zoomSize = 1.2f;
+		} else if (this.zoomSize < 1.3f) { 
+			this.zoomSize = 1.4f;
+		} else if (this.zoomSize < 1.5f) { 
+			this.zoomSize = 1.6f;
+		} else if (this.zoomSize < 1.7f) { 
+			this.zoomSize = 1.8f;
+		} else if (this.zoomSize < 1.9f) { 
+			this.zoomSize = 2.0f;
+		} else if (this.zoomSize < 2.1f) { 
+			this.zoomSize = 2.2f;
+		} else if (this.zoomSize < 2.3f) { 
+			this.zoomSize = 2.4f;
+		} else if (this.zoomSize < 2.5f) { 
+			this.zoomSize = 2.6f;
+		} else if (this.zoomSize < 2.7f) { 
+			this.zoomSize = 2.8f;
+		} else if (this.zoomSize < 2.9f) { 
+			this.zoomSize = 3.0f;
+		}
+	}
+	
+	public void setZoomOut() {
+		if (this.zoomSize > 2.9f) {
+			this.zoomSize = 2.8f;
+		} else if (this.zoomSize > 2.7f) { 
+			this.zoomSize = 2.6f;
+		} else if (this.zoomSize > 2.5f) { 
+			this.zoomSize = 2.4f;
+		} else if (this.zoomSize > 2.3f) { 
+			this.zoomSize = 2.2f;
+		} else if (this.zoomSize > 2.1f) { 
+			this.zoomSize = 2.0f;
+		} else if (this.zoomSize > 1.9f) { 
+			this.zoomSize = 1.8f;
+		} else if (this.zoomSize > 1.7f) { 
+			this.zoomSize = 1.6f;
+		} else if (this.zoomSize > 1.5f) { 
+			this.zoomSize = 1.4f;
+		} else if (this.zoomSize > 1.3f) { 
+			this.zoomSize = 1.2f;
+		} else if (this.zoomSize > 1.1f) { 
+			this.zoomSize = 1.0f;
+		}
+	}
+}
+

@@ -1,0 +1,177 @@
+package com.oupai.activity;
+
+import java.net.URLEncoder;
+
+import com.ccvideo.R;
+import com.oupai.entity.CCVideoFeedbackEntity;
+import com.oupai.misc.Constants;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class CCVideoFeedbackActivity extends Activity {
+	private ImageView mBackBtn = null;
+	private Button    mSubmitBtn = null;
+	private TextView  mFeedbackContentTextView = null;
+	private TextView  mContactQQTextView = null;
+	private TextView  mContactMobileTextView = null;
+	
+	private String    mFeedbackMsg = null;
+	private String    mContactQQ = null;
+	private String    mContactMobile = null;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.ccvideo_feedback_layout);
+		
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		initViews();
+		initListeners();
+	}
+	
+	
+	private void initViews() {
+		mBackBtn = (ImageView)findViewById(R.id.return_btn_id);
+		mSubmitBtn = (Button)findViewById(R.id.submit_id);
+		mFeedbackContentTextView = (TextView)findViewById(R.id.feedback_edit_text_id);
+		mContactQQTextView = (TextView)findViewById(R.id.contact_qq_id);
+		mContactMobileTextView = (TextView)findViewById(R.id.contact_mobile_id);
+	}
+	
+	private void initListeners() {
+		mBackBtn.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				returnCancelAction();
+			}
+		});
+		mSubmitBtn.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				submitFeedback();
+			}
+		});
+	}
+	
+	private void returnCancelAction() {
+		finish();
+	}
+	
+    private void submitFeedback() {
+    	mFeedbackMsg = mFeedbackContentTextView.getText().toString().trim();
+    	mContactQQ = mContactQQTextView.getText().toString().trim();
+    	mContactMobile = mContactMobileTextView.getText().toString().trim();
+    	
+    	if (mFeedbackMsg.equalsIgnoreCase("")) {
+    		showAlertInfo(R.string.submit_error, R.string.submit_no_content);
+    	} else if (mContactQQ.equalsIgnoreCase("") && mContactMobile.trim().equalsIgnoreCase("")) {
+    		showAlertInfo(R.string.submit_error, R.string.submit_no_contact);
+    	}
+    	else {
+    		submitFeedbackAction();
+    	}
+    }
+    
+    private void submitFeedbackAction()
+    {
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kFeedbackAPI);
+		stb.append("uname=" + Utils.getInstance().getUsername(this));
+		
+		if(!mContactMobile.equalsIgnoreCase("")&&mContactMobile.length()==11){
+			
+			stb.append("&mobile=" + mContactMobile);
+		}else
+		{
+			Toast.makeText(getApplicationContext(), "请检查手机号码是否输入正确", 1).show();
+		}
+		if(!mContactQQ.equalsIgnoreCase(""))
+			stb.append("&qq=" + mContactQQ);
+		stb.append("&question=" + URLEncoder.encode(mFeedbackMsg));
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_FEEDBACK);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_FEEDBACK || netData==null)
+					return;
+				
+				CCVideoFeedbackEntity entity = (CCVideoFeedbackEntity)netData;
+				if(entity.mRetVal.equalsIgnoreCase("ok")) {
+					showAlertInfoAndFinish(R.string.submit_ok, R.string.submit_ok_str);
+				} else {
+					showAlertInfo(R.string.submit_error, R.string.submit_error_str);
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+    }
+    
+	private void showAlertInfo(int titleStrRes, int contentStrRes) {
+		AlertDialog.Builder alert = new AlertDialog.Builder(this);
+		alert.setTitle(getResources().getString(
+				titleStrRes));
+		alert.setMessage(contentStrRes);
+		
+		alert.setPositiveButton(getResources()
+				.getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						dialog.dismiss();
+					}
+				});	
+		alert.show();
+	}
+	
+	private void showAlertInfoAndFinish(int titleStrRes, int contentStrRes) {
+		AlertDialog.Builder alert = new AlertDialog.Builder(this);
+		alert.setTitle(getResources().getString(
+				titleStrRes));
+		alert.setMessage(contentStrRes);
+		alert.setPositiveButton(getResources()
+				.getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						dialog.dismiss();
+						CCVideoFeedbackActivity.this.finish();
+					}
+				});	
+		alert.show();
+	}
+}

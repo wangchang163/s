@@ -1,0 +1,50 @@
+package com.example.player;
+
+import io.vov.vitamio.LibsChecker;
+import io.vov.vitamio.demo.VideoViewDemo;
+import io.vov.vitamio.widget.MediaController;
+import android.media.MediaPlayer;
+import android.os.Bundle;
+import android.support.v7.app.ActionBarActivity;
+import android.widget.Toast;
+import android.widget.VideoView;
+
+public class MainActivity extends ActionBarActivity {
+
+	private String path="http://vfx.mtime.cn/Video/2015/04/13/mp4/150413223643633591_480.mp4";
+	private VideoView mVideoView;
+
+	@Override
+	public void onCreate(Bundle icicle) {
+		super.onCreate(icicle);
+		if (!LibsChecker.checkVitamioLibs(this))
+			return;
+		setContentView(R.layout.videoview);
+		mVideoView = (VideoView) findViewById(R.id.surface_view);
+
+		if (path == "") {
+			// Tell the user to provide a media file URL/path.
+			Toast.makeText(VideoViewDemo.this, "Please edit VideoViewDemo Activity, and set path" + " variable to your media file URL/path", Toast.LENGTH_LONG).show();
+			return;
+		} else {
+			/*
+			 * Alternatively,for streaming media you can use
+			 * mVideoView.setVideoURI(Uri.parse(URLstring));
+			 */
+			mVideoView.setVideoPath(path);
+			mVideoView.setMediaController(new MediaController(this));
+			mVideoView.requestFocus();
+
+			mVideoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+				@Override
+				public void onPrepared(MediaPlayer mediaPlayer) {
+					// optional need Vitamio 4.0
+					mediaPlayer.setPlaybackSpeed(1.0f);
+				}
+			});
+		}
+
+	}
+
+	
+}

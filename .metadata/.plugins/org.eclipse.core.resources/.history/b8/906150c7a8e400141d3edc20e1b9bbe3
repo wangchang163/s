@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/device_view_bg_color">
+    
+	<RelativeLayout 
+        android:id="@+id/navigation_bar_id"
+        android:layout_width="fill_parent"
+        android:layout_height="50dp"
+        android:background="@color/bluebg">
+	        <ImageView 
+	            android:id="@+id/return_btn_id"
+	            android:layout_width="wrap_content"
+	            android:layout_height="wrap_content"
+	            android:layout_marginLeft="5dp"
+	            android:layout_centerVertical="true"
+	            android:background="@drawable/return_btn">
+			</ImageView>
+			
+	        <RelativeLayout 
+	            android:layout_width="wrap_content"
+	            android:layout_height="wrap_content"
+	            android:layout_marginTop="5dp"
+	            android:layout_centerHorizontal="true">
+				<TextView
+				    android:id="@+id/title_id"
+				    android:layout_width="wrap_content"
+				    android:layout_height="wrap_content"
+				    android:text="@string/feedback_str"
+				    android:textColor="@color/white"
+				    android:textSize="21sp"
+				    android:layout_marginTop="5dp">
+				</TextView>
+			</RelativeLayout>
+	</RelativeLayout>
+	
+	<RelativeLayout
+	    android:id="@+id/feedback_section_id"
+	    android:layout_width="fill_parent"
+	    android:layout_height="wrap_content"
+	    android:layout_below="@+id/navigation_bar_id"
+		android:layout_marginLeft="15dp"
+		android:layout_marginRight="15dp"
+		>
+	    
+	    <EditText
+	        android:id="@+id/feedback_edit_text_id"
+	        android:layout_width="match_parent"
+	        android:layout_height="200dp"
+	        android:layout_marginTop="5dp"
+	        android:gravity="start"
+	        android:hint="@string/feedback_hint_str"
+	        android:background="@color/white"
+	        />
+	    
+	    <TextView 
+	        android:id="@+id/feedback_prompt_id"
+	        android:layout_width="match_parent"
+	        android:layout_height="wrap_content"
+	        android:layout_below="@+id/feedback_edit_text_id"
+	        android:layout_marginTop="5dp"
+	        android:text="@string/feedback_prompt_str"
+	        android:textColor="@color/submit_button_color"/>
+	    
+	    <LinearLayout 
+	        android:id="@+id/contact_section_id"
+	        android:layout_width="match_parent"
+	        android:layout_height="wrap_content"
+	        android:layout_below="@+id/feedback_prompt_id"
+	        android:layout_marginTop="5dp"
+	        android:orientation="horizontal">
+	        
+			<EditText 
+	            android:id="@+id/contact_qq_id"
+	            android:layout_width="0dip"
+	            android:layout_height="50dp"
+	            android:layout_weight="1"
+				android:gravity="center"
+				android:textSize="14sp"
+				android:background="@color/white"
+				android:layout_marginLeft="2dp"
+				android:layout_marginRight="2dp"
+				android:inputType="number"
+	            android:hint="@string/share_qq_btn_text"/>
+	        
+	        <EditText
+	            android:id="@+id/contact_mobile_id"
+	            android:layout_width="0dip"
+	            android:layout_height="50dp"
+	            android:layout_weight="1"
+	            android:gravity="center"
+	            android:textSize="14sp"
+	            android:inputType="phone"
+	            android:background="@color/white"
+				android:layout_marginLeft="2dp"
+				android:layout_marginRight="2dp"
+	            android:hint="@string/share_mobile_text">
+	        </EditText>
+	        
+	    </LinearLayout>
+	    
+	    <Button 
+	        android:id="@+id/submit_id"
+	        android:layout_width="match_parent"
+	        android:layout_height="50dp"
+	        android:layout_below="@+id/contact_section_id"
+	        android:layout_marginTop="5dp"
+	        android:background="@color/submit_button_color"
+	        android:text="@string/submit_str"
+	        android:textSize="20sp"
+	        android:textColor="@color/white"/>
+	    
+	</RelativeLayout>
+</RelativeLayout>

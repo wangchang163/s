@@ -1,0 +1,909 @@
+package com.oupai.activity;
+
+
+import java.io.File;
+import java.net.URLEncoder;
+import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.location.Location;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.view.KeyEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+import cn.smssdk.EventHandler;
+import cn.smssdk.SMSSDK;
+import cn.smssdk.gui.RegisterPage;
+import cn.smssdk.gui.RegisterPage.CheckUserExisCallback;
+
+import com.ccvideo.R;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+import com.oupai.asynctasks.AsyncDownloadTask;
+import com.oupai.entity.QQUserInfoEntity;
+import com.oupai.entity.UserRegisterEntity;
+import com.oupai.entity.WeiboUserInfoEntity;
+import com.oupai.misc.AppSysEnv;
+import com.oupai.misc.Constants;
+import com.oupai.misc.QQAccessTokenKeeper;
+import com.oupai.misc.QQAuth2AccessToken;
+import com.oupai.misc.Utils;
+import com.oupai.misc.WeiboAccessTokenKeeper;
+import com.oupai.misc.WeixinAccessTokenKeeper;
+import com.oupai.misc.WeixinAuth2AccessToken;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.sina.weibo.sdk.auth.Oauth2AccessToken;
+import com.sina.weibo.sdk.auth.WeiboAuthListener;
+import com.sina.weibo.sdk.auth.sso.SsoHandler;
+import com.sina.weibo.sdk.exception.WeiboException;
+import com.tencent.mm.sdk.modelmsg.SendAuth;
+import com.tencent.tauth.IUiListener;
+import com.tencent.tauth.UiError;
+import com.umeng.analytics.MobclickAgent;
+
+public class LoginActivity extends Activity {
+	private LoginActivity mainActivity = null;
+	
+	private String loginUserName = null;
+	private String loginUserPasswordMD5 = null;
+	private String loginUserPassword = null;
+	private String loginUserDName = null;
+	private boolean isStorePassword = false;
+	private boolean isLoginAuto = true;
+	private boolean isFromLogout = false;
+	
+	private int mRequestFrom = 0;
+	private ImageView mQQLogin = null;
+	private ImageView mWeixinLogin = null;
+	private ImageView mWeiboLogin = null;
+	private UserRegisterEntity mEntity = null; 
+	
+	private String mToken = null;
+	
+	private ProgressDialog mProgressDialog = null;
+	
+	private final static int kActivityResultForOtherLogin = 101;
+	private final static int kActivityResultForRegister = 102;
+	
+	public final static int kActionIgnore = 0;
+	public final static int kActionAutoLogin = 1;
+	public final static int kActionGotoRegister = 2;
+	
+	private String mCurrentId = null;
+	private String mCurrentCountryName = null;
+	private String mCurrentMobileNumber = null;
+	private int mCurrentVerifyType = Constants.kRegisterTypeRegister;
+	private HashMap<String, String> mCountryRules;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		requestWindowFeature(Window.FEATURE_NO_TITLE);
+		
+		if(Utils.getInstance().mUtilsInited==false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		initBundles();
+		
+		this.mainActivity = this;
+		
+		try {
+			setContentView(R.layout.activity_login_layout);
+			initViews();
+//			initData();
+			this.initActivityEvents();
+
+			AppSysTool.LogDebug("Product Model: " + android.os.Build.MODEL + "," 
+		                + android.os.Build.VERSION.SDK + "," +android.os.Build.VERSION.SDK_INT+", "
+		                + android.os.Build.VERSION.RELEASE); 
+			
+			fetchUserAccount();
+			boolean canAutoLogin = false;
+			if (this.isLoginAuto && !isFromLogout && loginUserName!=null) {
+				if(mRequestFrom==Constants.kLoginTypeOupai && loginUserPassword !=null)
+					canAutoLogin = true;
+				else if(mRequestFrom !=Constants.kLoginTypeOupai && 
+						mToken!=null && !mToken.equalsIgnoreCase("") &&
+						loginUserDName!=null && !loginUserDName.equalsIgnoreCase("") && 
+						loginUserName!=null && !loginUserName.equalsIgnoreCase("")) {
+					canAutoLogin = true;
+				}
+			}
+			
+			if(canAutoLogin)
+				autoLogin();
+			else {
+				if(Utils.getInstance().mShowNeedUpdate) {
+					showAlertHasUpdate();
+					Utils.getInstance().mShowNeedUpdate = false;
+				}
+			}
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private void showAlertHasUpdate() {
+		AlertDialog.Builder alert = new AlertDialog.Builder(this);
+		alert.setTitle(getResources().getString(
+				R.string.update_app_str));
+		alert.setMessage(R.string.has_update_str);
+		
+		alert.setPositiveButton(getResources()
+				.getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						new AsyncDownloadTask(LoginActivity.this,
+								Utils.getInstance().mUpdateEntity.mUpdateURL,
+								new AsyncDownloadTask.CallBack() {
+									@Override
+									public void callback() {
+										LoginActivity.this.downloadNewAPK();
+									}
+								}).execute(Utils.getInstance().mUpdateEntity.mUpdateURL);
+
+					}
+				});
+		
+		alert.setNegativeButton(getResources().getString(R.string.cancel_str), new DialogInterface.OnClickListener() {
+			
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
+				dialog.dismiss();
+				
+			}
+		});
+		
+		alert.show();
+	}
+	
+	private void downloadNewAPK() {
+		final String generateFileName = "/download.apk";
+		Intent intent = new Intent(Intent.ACTION_VIEW);
+		intent.setDataAndType(Uri.fromFile(new File(
+				Utils.getInstance().mAppExternalStoragePath
+						+ generateFileName)), Constants.kAppMimeType);
+		startActivity(intent);
+	}
+	
+	private void initViews() {
+		TextView titleView = (TextView)findViewById(R.id.simple_title);
+		titleView.setText(R.string.login_str);
+		
+		mQQLogin = (ImageView)findViewById(R.id.qq_login_id);
+		mWeixinLogin = (ImageView)findViewById(R.id.weixin_login_id);
+		mWeiboLogin = (ImageView)findViewById(R.id.weibo_login_id);
+		
+		mQQLogin.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				loginFromQQ();
+			}
+		});
+		
+		mWeixinLogin.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				if(Utils.getInstance().checkWhetherInstalledWeixin())
+					loginFromWeixin();
+				else {
+					Toast.makeText(LoginActivity.this, R.string.weixin_not_installed_str, Toast.LENGTH_LONG).show();
+				}
+			}
+		});
+		
+		mWeiboLogin.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				loginFromWeibo();
+			}
+		});
+		
+		ImageView backBtn = (ImageView)findViewById(R.id.simple_back);
+		backBtn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				finish();
+			}
+		});
+	}
+	
+	private void autoLogin() {
+		switch(mRequestFrom) {
+		case Constants.kLoginTypeOupai:
+			loginAppServer();
+			break;
+		case Constants.kLoginTypeQQ:			
+			loginFromQQ();
+			break;
+		case Constants.kLoginTypeSina:
+			loginFromWeibo();
+			break;
+		case Constants.kLoginTypeWeixin:
+			loginFromWeixin();
+			break;
+		default:
+			break;
+		}
+		return;
+	}
+	
+	private void loginFromWeibo() {
+		mRequestFrom = Constants.kLoginTypeSina;
+		Oauth2AccessToken token = WeiboAccessTokenKeeper.readAccessToken(this);
+		if(token!=null && !token.isSessionValid() && token.getExpiresTime()-System.currentTimeMillis()<=0){
+			Utils.getInstance().initWeiboSDK(this);
+			Utils.getInstance().mSsoHandler = new SsoHandler(LoginActivity.this, Utils.getInstance().mWeiboAuth);
+			Utils.getInstance().mSsoHandler.authorize(new AuthListener());
+		}
+		else {
+			requestSnsLoginUserData(Constants.kLoginTypeSina);
+		}
+	}
+	
+	private void loginFromWeixin() {
+		mRequestFrom = Constants.kLoginTypeWeixin;
+		Utils.getInstance().mWXActionType = Constants.kWeixinLoginActionType;
+		
+		WeixinAuth2AccessToken token = WeixinAccessTokenKeeper.readAccessToken(this);
+		if (token != null && token.getExpires_in() - System.currentTimeMillis() <= 0
+				|| TextUtils.isEmpty(token.getOpenid())) {
+			SendAuth.Req req = new SendAuth.Req();
+			req.scope = "snsapi_userinfo";
+			req.state = "wechat_sdk_demo";
+			Utils.getInstance().wxAPI.sendReq(req);
+		}
+		else {
+			requestSnsLoginUserData(Constants.kLoginTypeWeixin);
+		}
+	}
+	
+	private void loginFromQQ() {
+		mRequestFrom = Constants.kLoginTypeQQ;
+		QQAuth2AccessToken token = QQAccessTokenKeeper.readAccessToken(this);
+		if(token != null && token.getCurExpiresTime()<=0){
+			IUiListener listener = new QQAuthListener() {
+				@Override
+				protected void doComplete(JSONObject values) {
+					AppSysTool.LogDebug("Values +"+values);
+					requestSnsLoginUserData(Constants.kLoginTypeQQ);
+				}
+			};
+			
+			try { 
+			Utils.getInstance().mTencent.login(LoginActivity.this, "all", listener);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		else{
+			requestSnsLoginUserData(Constants.kLoginTypeQQ);
+		}
+	}
+	
+	private void showSorryAlert() {
+		AlertDialog.Builder builder = new AlertDialog.Builder(this);
+		builder.setTitle(R.string.say_sorry_str);
+		builder.setMessage(R.string.only_trail_accounts_str);
+		builder.setPositiveButton(R.string.confirm_str, new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int arg1) {
+				dialog.dismiss();
+			}
+		});
+		
+		builder.show();
+	}
+	
+	private void initBundles() {
+		Bundle b = this.getIntent().getExtras();
+		if(b!=null && b.containsKey("is_from_logout")) {
+			isFromLogout = b.getBoolean("is_from_logout");
+		}
+	}
+	
+	private void initActivityEvents() {
+		View register = this.findViewById(R.id.register_str_id);		
+		register.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View v) {
+				gotoRegisterActivity();
+			}
+		});
+		
+		View otherLogin = this.findViewById(R.id.login_mobile_layout_id);
+		otherLogin.setOnClickListener(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				gotoOtherLoginActivity();
+			}
+		});
+		
+//		View guestMode = this.findViewById(R.id.register_layout_id);
+//		guestMode.setOnClickListener(new View.OnClickListener() {
+//			
+//			@Override
+//			public void onClick(View arg0) {
+//				gotoMainPage();
+//			}
+//		});
+	}
+	
+	private void registerAction(int type) {
+		RegisterPage registerPage = new RegisterPage();
+		registerPage.setCheckUserExisCallback(new CheckUserExisCallback() {
+			
+			@Override
+			public void dataBackListener(Runnable runnable, String openid) {
+				Utils.getInstance().checkUserExist(LoginActivity.this, runnable, openid, true);
+			}
+		});
+		registerPage.setRegisterCallback(new EventHandler() {
+			public void afterEvent(int event, int result, Object data) {
+				if(result == SMSSDK.RESULT_COMPLETE) {
+					@SuppressWarnings("unchecked")
+					HashMap<String, Object> phoneMap = (HashMap<String, Object>) data;
+					mCurrentCountryName = (String) phoneMap.get("country");
+					mCurrentMobileNumber = (String) phoneMap.get("phone");
+					mCurrentId = (String) phoneMap.get("currentCode");
+					
+					SMSSDK.submitUserInfo(null, null, null, mCurrentCountryName, mCurrentMobileNumber);
+					
+					Intent intent = new Intent(LoginActivity.this, CCVideoVerifiedActivity.class);
+					intent.putExtra("verifiedType", mCurrentVerifyType);
+					intent.putExtra("phoneNumber", mCurrentCountryName+"_"+mCurrentMobileNumber);
+					startActivity(intent);
+					if (mCurrentVerifyType == Constants.kRegisterTypeRegister) {
+						finish();
+					}
+				}
+			}
+		});
+		registerPage.show(this);
+	}
+	
+	private void gotoRegisterActivity() {
+//		Intent intent = new Intent(mainActivity, RegisterActivity.class);
+//		mainActivity.startActivityForResult(intent, kActivityResultForRegister);
+		registerAction(Constants.kRegisterTypeRegister);
+	}
+	
+	private void gotoRecoveryActivity() {
+		Intent intent = new Intent(mainActivity, RecoveryActivity.class);
+		mainActivity.startActivity(intent);
+	}
+	
+	private void gotoMainPage() {
+		Intent intent = new Intent(mainActivity, CCVideoSquareActivity.class);
+		mainActivity.startActivity(intent);
+	}
+	
+	private void gotoOtherLoginActivity() {
+		Intent intent = new Intent(mainActivity, CCVideoOtherLoginActivity.class);
+		mainActivity.startActivityForResult(intent, kActivityResultForOtherLogin);
+	}
+	
+	private void loginAppServer() {
+		mRequestFrom = Constants.kLoginTypeOupai;
+		
+		this.loginUserName = Utils.getInstance().getUsername(this);
+		this.loginUserPassword = Utils.getInstance().getPassword(this);
+		this.isLoginAuto = true;
+		this.isStorePassword = true;
+		
+		if (loginUserName == null || 
+				loginUserPassword == null || 
+				loginUserName.length() < 6 || 
+				loginUserPassword.length() < 4 || 
+				loginUserName.length() > 16 || 
+				loginUserPassword.length() > 16) {
+			Toast.makeText(mainActivity, R.string.error_login_input_str, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		
+		registerUser(null, null, loginUserName, loginUserName, null, loginUserPassword);
+	}
+
+	
+	public void fetchUserAccount() {
+		SharedPreferences sp = this.getSharedPreferences(AppSysEnv.APPSYS_LOCAL_DBFILE, Context.MODE_WORLD_WRITEABLE);
+		this.loginUserName = sp.getString(AppSysEnv.APPSYS_ACCOUNT_KEYSTR, null);
+		this.isLoginAuto = sp.getBoolean(AppSysEnv.APPSYS_AUTOLOGIN_KEYSTR, false);
+		if (this.isLoginAuto == true) {
+			this.loginUserPassword = sp.getString(AppSysEnv.APPSYS_PASSWORD_KEYSTR, null);
+			this.loginUserPasswordMD5 = sp.getString(AppSysEnv.APPSYS_PASSWORD_MD5_KEYSTR, null);
+			this.loginUserDName = sp.getString(AppSysEnv.APPSYS_DNAME, null);
+			this.mRequestFrom = sp.getInt(AppSysEnv.APPSYS_LOGIN_TYPE, 0);
+			this.mToken = sp.getString(AppSysEnv.APPSYS_TOKEN, null);
+			this.isStorePassword = true;
+		}
+	}
+
+    protected void removePassword() {
+    	SharedPreferences sp = this.getSharedPreferences(AppSysEnv.APPSYS_LOCAL_DBFILE, Context.MODE_WORLD_WRITEABLE);
+		sp.edit().remove(AppSysEnv.APPSYS_PASSWORD_KEYSTR).commit();
+    }
+    
+	protected void storeUserPassword() 
+	{
+		AppSysEnv.appDBPutLoginConfigInfo(mainActivity, loginUserPassword, isLoginAuto, isStorePassword);
+	}
+	
+	protected boolean storeUserInfomation(String uinfo) {		
+
+		try {
+			JSONObject jsonObj = new JSONObject(uinfo);
+			String name = jsonObj.getString("name"); 
+			String email = jsonObj.getString("email"); 
+			String phone = jsonObj.getString("phone");
+			String weixin = jsonObj.getString("weixin");
+			
+			AppSysTool.LogDebug("name: "+name+" email: "+email+" phone: "+phone+" weixin: "+weixin);
+			
+			AppSysEnv.appDBPutUserInformation(mainActivity, name, email, phone, weixin);
+
+			
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return false;
+		}
+
+		return true;
+	}
+	
+	/*
+	 * Login related actions
+	 */
+	
+	class QQAuthListener implements IUiListener {
+
+		@Override
+		public void onCancel() {
+			Toast.makeText(LoginActivity.this, R.string.qq_auth_canceled, Toast.LENGTH_LONG).show();
+		}
+		
+		protected void doComplete(JSONObject values) {
+			
+		}
+
+		@Override
+		public void onError(UiError e) {
+			Toast.makeText(LoginActivity.this, R.string.qq_auth_failed, Toast.LENGTH_LONG).show();
+		}
+
+		@Override
+		public void onComplete(Object response) {
+			try {
+			Utils.getInstance().mQQAccessToken = QQAuth2AccessToken.parseAccessToken((JSONObject)response);
+			if(Utils.getInstance().mTencent != null && Utils.getInstance().mTencent.isSessionValid()){
+				QQAccessTokenKeeper.writeAccessToken(LoginActivity.this, Utils.getInstance().mQQAccessToken);
+				Toast.makeText(LoginActivity.this, R.string.qq_auth_succ, Toast.LENGTH_LONG).show();
+				doComplete((JSONObject)response);
+			}
+			}catch(Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	
+	class AuthListener implements WeiboAuthListener {
+
+		@Override
+		public void onCancel() {
+            Toast.makeText(LoginActivity.this, 
+                    R.string.weibosdk_demo_toast_auth_canceled, Toast.LENGTH_LONG).show();
+		}
+
+		@Override
+		public void onComplete(Bundle values) {
+			Utils.getInstance().mWeiboAccessToken = Oauth2AccessToken.parseAccessToken(values);
+            if (Utils.getInstance().mWeiboAccessToken.isSessionValid()) {
+                WeiboAccessTokenKeeper.writeAccessToken(LoginActivity.this, Utils.getInstance().mWeiboAccessToken);
+                requestSnsLoginUserData(Constants.kLoginTypeSina);
+            } else {
+                String code = values.getString("code");
+                String message = getString(R.string.weibosdk_demo_toast_auth_failed);
+                if (!TextUtils.isEmpty(code)) {
+                    message = message + "\ncode: " + code;
+                }
+                Toast.makeText(LoginActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+		}
+
+		@Override
+		public void onWeiboException(WeiboException e) {
+            Toast.makeText(LoginActivity.this, 
+                    R.string.weibo_auth_failed , Toast.LENGTH_LONG).show();
+		}
+		
+	}
+	
+	public void requestSnsLoginUserData(int loginType)
+	{
+		mProgressDialog = ProgressDialog.show(this, getResources().getString(R.string.login_in_progress), getResources().getString(R.string.pls_wait_msg));
+		
+		if(loginType == Constants.kLoginTypeSina) {
+			if(Utils.getInstance().mWeiboAccessToken != null) {		
+				StringBuilder stb = new StringBuilder("");
+				stb.append(Constants.kWeiboGetUserInfoAPI);
+				stb.append("source=" + Constants.WEIBO_APP_KEY);
+				stb.append("&access_token=" + Utils.getInstance().mWeiboAccessToken.getToken());
+				stb.append("&uid=" + Utils.getInstance().mWeiboAccessToken.getUid().toString());
+				
+				if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+					Utils.getInstance().mHttpTask.cancel(true);
+					Utils.getInstance().mHttpTask = null;
+				}
+				
+				HttpParams params = new HttpParams();
+				params.setActionId(HttpActionID.ACTION_ID_REQUEST_WEIBO_USER_INFO);
+				params.setActionUrl(stb.toString());
+				Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+					
+					@Override
+					public void callBack(int resultCode, int actionId, String actionParam,
+							Object netData) {
+						
+						if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+							Utils.getInstance().networkFailed(mProgressDialog);
+							return;
+						}
+						
+						if(actionId!=HttpActionID.ACTION_ID_REQUEST_WEIBO_USER_INFO || netData==null)
+							return;
+						
+						registerSinaUser(netData, actionParam);
+					}
+				});
+				Utils.getInstance().mHttpTask.execute(params);
+			}
+		}
+		else if(loginType == Constants.kLoginTypeQQ) {
+			if(Utils.getInstance().mQQAccessToken != null) {
+				StringBuilder stb = new StringBuilder("");
+				stb.append(Constants.kQQGetUserInfoAPI);
+				stb.append("access_token=" + URLEncoder.encode(Utils.getInstance().mQQAccessToken.getToken()));
+				stb.append("&oauth_consumer_key=" + URLEncoder.encode(Constants.QQ_APP_KEY));
+				stb.append("&openid=" + URLEncoder.encode(Utils.getInstance().mQQAccessToken.getOpenid()));
+				
+				if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+					Utils.getInstance().mHttpTask.cancel(true);
+					Utils.getInstance().mHttpTask = null;
+				}
+				
+				HttpParams params = new HttpParams();
+				params.setActionId(HttpActionID.ACTION_ID_REQUEST_QQ_USER_INFO);
+				params.setActionUrl(stb.toString());
+				Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+					
+					@Override
+					public void callBack(int resultCode, int actionId, String actionParam,
+							Object netData) {
+						
+						if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+							Utils.getInstance().networkFailed(mProgressDialog);
+							return;
+						}
+						
+						if(actionId!=HttpActionID.ACTION_ID_REQUEST_QQ_USER_INFO || netData==null)
+							return;
+						
+						registerQQUser(netData, actionParam);
+					}
+				});
+				
+				Utils.getInstance().mHttpTask.execute(params);
+			}
+		}
+		else if(loginType == Constants.kLoginTypeWeixin) {
+		}
+	}
+	
+	private void registerSinaUser(Object netData, String actionParam) {
+		WeiboUserInfoEntity entity = (WeiboUserInfoEntity)netData;
+		if(Utils.getInstance().mWeiboAccessToken!=null && entity.mUserScreenName!=null) {
+			registerUser("sina", Utils.getInstance().mWeiboAccessToken.getUid(), null, entity.mUserScreenName, entity.mProfileImageUrl, null);
+		}
+		else {
+			mProgressDialog.dismiss();
+			
+			Toast.makeText(LoginActivity.this, R.string.login_failed_text, Toast.LENGTH_LONG).show();
+		}
+	}
+	
+	private void registerQQUser(Object netData, String actionParam) {
+		QQUserInfoEntity entity = (QQUserInfoEntity)netData;
+		if(Utils.getInstance().mQQAccessToken!=null && entity.mUsername!=null) {
+			registerUser("qq", Utils.getInstance().mQQAccessToken.getOpenid(), null, entity.mUsername, entity.mUserIconURL, null);
+		} else {
+			mProgressDialog.dismiss();
+			
+			QQAccessTokenKeeper.clear(mainActivity);
+			
+			Toast.makeText(LoginActivity.this, R.string.login_failed_text, Toast.LENGTH_LONG).show();
+		}
+	}
+	
+	private void registerUser(String from, String token, String userUname, String userDName, String userIcon, String passwd) {
+		mToken = token;
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kRegisterUserAPI);
+		if(from==null || from.equalsIgnoreCase("")) {
+			stb.append("uname="+URLEncoder.encode(userUname));
+			try {
+				stb.append("&paswd="+Utils.getInstance().getMD5(passwd));
+			} catch(NoSuchAlgorithmException e) {
+				e.printStackTrace();
+			}
+			stb.append("&dname="+URLEncoder.encode(userUname));
+		}
+		else {
+			stb.append("authtype="+from+"&token="+token);
+			stb.append("&dname="+URLEncoder.encode(userDName));
+			stb.append("&logourl="+URLEncoder.encode(userIcon));
+		}
+		/* Set GPS information */
+		LocationManager manager  = (LocationManager)mainActivity.getSystemService(Context.LOCATION_SERVICE);
+		if (manager != null) {
+			try {
+			Location location = manager.getLastKnownLocation(Utils.getInstance().getLastLocationProvider(mainActivity));
+			if (location != null) {
+				stb.append("&gps_info=1"+
+						"&gps_accuracy="+location.getAccuracy()+
+						"&gps_altitude="+location.getAltitude()+
+						"&gps_bearing="+location.getBearing()+
+						"&gps_speed="+location.getSpeed()+
+						"&gps_latitude="+location.getLatitude()+
+						"&gps_longitude="+location.getLongitude());
+			} else {
+				stb.append("&gps_info=0");
+			}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+		
+		stb.append("&push_id=" + Utils.getInstance().getPushID());
+		stb.append("&channel_id=" + Utils.getInstance().getChannelID());
+		stb.append("&app_id=" + Utils.getInstance().getAppID());
+		stb.append("&dev_token=" + com.oupai.misc.Utils.getDeviceId(this));
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_REGISTER_USER);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(mProgressDialog);
+					return;
+				}
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_REGISTER_USER || netData==null)
+					return;
+				
+				if(mProgressDialog != null)
+					mProgressDialog.dismiss();
+				
+				mEntity = (UserRegisterEntity)netData;
+				loginUserName = mEntity.mUname;
+				loginUserDName = mEntity.mDname;
+				loginUserPasswordMD5 = mEntity.mPassword;
+				
+				if (mEntity.mRetVal == null) {
+					Toast.makeText(LoginActivity.this, R.string.error_net_str, Toast.LENGTH_SHORT).show();
+
+					return;
+				}
+				
+				if(mEntity.mRetVal.equalsIgnoreCase("ok")) {
+					
+					//Toast.makeText(LoginActivity.this, R.string.login_succ_text, Toast.LENGTH_LONG).show();
+					loginSuccAction();
+				}
+				else {
+					Utils.getInstance().removePassword(mainActivity);
+					Toast.makeText(LoginActivity.this, R.string.login_failed_text, Toast.LENGTH_LONG).show();
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void loginSuccAction() {
+		try {
+			saveUserInfo();
+			goThroughToLive();
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private void saveUserInfo() {
+		SharedPreferences sp = getSharedPreferences(AppSysEnv.APPSYS_LOCAL_DBFILE, Context.MODE_WORLD_WRITEABLE);
+		sp.edit().putInt(AppSysEnv.APPSYS_LOGIN_TYPE, mRequestFrom).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_ACCOUNT_KEYSTR, mEntity.mUname).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PASSWORD_KEYSTR, loginUserPassword).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PASSWORD_MD5_KEYSTR, loginUserPasswordMD5).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_SESSION_ID, mEntity.mSessionID).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_ICONURL, mEntity.mLogoURL).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_DNAME, loginUserDName).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_STOREPASSWORD_KEYSTR, true).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_AUTOLOGIN_KEYSTR, true).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_EMAIL_KEYSTR, mEntity.mEmail).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PHONE_KEYSTR, mEntity.mPhone).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_WEIXIN_KEYSTR, mEntity.mWeixin).commit();
+		sp.edit().putInt(AppSysEnv.APPSYS_LUBO_COUNT, mEntity.mLuboCount).commit();
+		sp.edit().putInt(AppSysEnv.APPSYS_FOLLOW_COUNT, mEntity.mFollowCount).commit();
+		sp.edit().putInt(AppSysEnv.APPSYS_FANS_COUNT, mEntity.mFansCount).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_GENDER, mEntity.mGender).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_TOKEN, mToken).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_IS_LOGGED_IN, true).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_INVITE_URL, mEntity.mInviteURL).commit();
+		sp.edit().putInt(AppSysEnv.APPSYS_VIDEO_QUALITY_USER_PREFERENCE, 2).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_SIGNATURE_KEYSTR, mEntity.mSignature).commit();
+	}
+    
+    private void goThroughToLive() {
+		finish();
+//		//Intent intent = new Intent(mainActivity, CCVideoMainActivity.class);
+//		Intent intent = new Intent(mainActivity, CCVideoSquareActivity.class);
+//		
+//		Bundle b = new Bundle();
+//		b.putString("uname", loginUserName);
+//		
+//		intent.putExtras(b);
+//			
+//		mainActivity.startActivityForResult(intent, AppSysEnv.APPSYS_MYCAMS_ACTIVITY);
+    }
+    	
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if(requestCode == kActivityResultForOtherLogin) {
+        	if(resultCode==RESULT_OK) {
+        		int action = data.getIntExtra("actionType", kActionIgnore);
+        		switch(action) {
+        		case kActionAutoLogin:
+        			goThroughToLive();
+        			break;
+        		case kActionGotoRegister:
+        			gotoRegisterActivity();
+        			break;
+        		case kActionIgnore:
+        		default:
+        			break;
+        		}
+        	}
+        }
+        else if(requestCode == kActivityResultForRegister) {
+        	if(resultCode==RESULT_OK) {
+        		int action = data.getIntExtra("actionType", kActionIgnore);
+        		switch(action) {
+        		case kActionAutoLogin:
+        			goThroughToLive();
+        			break;
+        		case kActionIgnore:
+        		default:
+        			break;
+        		}
+        	}
+        }
+        else {
+	        switch(mRequestFrom) {
+	        case Constants.kLoginTypeSina:
+	            if (Utils.getInstance().mSsoHandler != null) {
+	            	Utils.getInstance().mSsoHandler.authorizeCallBack(requestCode, resultCode, data);
+	            }
+	        	break;
+	        case Constants.kLoginTypeQQ:
+	        	if(Utils.getInstance().mTencent != null)
+	        		Utils.getInstance().mTencent.onActivityResult(requestCode, resultCode, data);
+	        	break;
+	        default:
+	        	break;
+	        }
+        }
+    }        
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event)
+    {
+      // TODO Auto-generated method stub
+      if(KeyEvent.KEYCODE_HOME==keyCode)
+        android.os.Process.killProcess(android.os.Process.myPid());
+      return super.onKeyDown(keyCode, event);
+    }
+   
+    @Override
+    public void onAttachedToWindow()
+    {
+      // TODO Auto-generated method stub
+      this.getWindow().setType(WindowManager.LayoutParams.TYPE_KEYGUARD);   
+      super.onAttachedToWindow();
+    }
+    
+//	@Override
+//	public boolean onCreateOptionsMenu(Menu menu) {
+//		// Inflate the menu; this adds items to the action bar if it is present.
+//		getMenuInflater().inflate(R.menu.login, menu);
+//		return true;
+//	}
+
+	@Override 
+	protected void onStart() { 
+		super.onStart(); 
+		
+		AppSysTool.LogDebug("onStart "+this); 
+	} 
+	@Override 
+	protected void onResume() { 
+		super.onResume(); 
+		AppSysTool.LogDebug("onResume "+this); 
+		MobclickAgent.onPageStart("LoginActivity");
+		MobclickAgent.onResume(this);
+		SMSSDK.getNewFriendsCount();
+		
+		//fetchUserAccount();
+	} 
+			
+	@Override 
+	protected void onPause() { 
+		super.onPause(); 
+		AppSysTool.LogDebug("onPause "+this);
+		MobclickAgent.onPageEnd("LoginActivity");
+		MobclickAgent.onPause(this);
+	} 
+	@Override 
+	protected void onStop() { 
+		super.onStop();
+		AppSysTool.LogDebug("onStop "+this); 
+	} 
+	@Override 
+	protected void onDestroy() { 
+		super.onDestroy(); 
+		AppSysTool.LogDebug("onDestroy "+this);
+		SMSSDK.unregisterAllEventHandler();
+	}
+}

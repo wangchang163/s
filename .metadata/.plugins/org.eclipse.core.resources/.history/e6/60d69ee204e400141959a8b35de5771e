@@ -1,0 +1,407 @@
+package com.oupai.activity;
+
+import java.net.URLEncoder;
+import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
+
+import cn.smssdk.EventHandler;
+import cn.smssdk.SMSSDK;
+import cn.smssdk.gui.CountryPage;
+import cn.smssdk.gui.RegisterPage;
+import cn.smssdk.gui.RegisterPage.CheckUserExisCallback;
+
+import com.appbase.AppSession;
+import com.ccvideo.R;
+import com.cloudfocus.opplayer.misc.AppSysTool;
+import com.oupai.entity.UserRegisterEntity;
+import com.oupai.misc.AppSysEnv;
+import com.oupai.misc.Constants;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.umeng.analytics.MobclickAgent;
+
+import android.app.Activity;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class CCVideoOtherLoginActivity extends Activity {
+	private ImageView mBackBtn = null;
+	private TextView mForgetPassword = null;
+	private TextView mRegister = null;
+	private TextView mLoginBtn = null;
+	
+	private RelativeLayout mCountryCode = null; 
+	private TextView mMobileCode = null;
+	
+	private int mRequestFrom = 0;
+	private String loginUserName = null;
+	private String loginUserPasswordMD5 = null;
+	private String loginUserPassword = null;
+	private String loginUserDName = null;
+	private boolean isStorePassword = false;
+	private boolean isLoginAuto = true;
+	private boolean isFromLogout = false;
+	private String mToken = null;
+	private ProgressDialog mProgressDialog = null;
+	private UserRegisterEntity mEntity = null;
+	
+	private String mCurrentId = null;
+	private String mCurrentCountryName = null;
+	private String mCurrentMobileNumber = null;
+	private int mCurrentVerifyType = Constants.kRegisterTypeRegister;
+	private HashMap<String, String> mCountryRules;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.ccvideo_otherlogin_activity_layout);
+
+		if(Utils.getInstance().mUtilsInited == false)
+			Utils.getInstance().initUtils(this);
+		
+		Utils.getInstance().registerExceptionHandler(this);
+		
+		initViews();
+		initListeners();
+		initData();
+	}
+	
+	private String getCountryDescString(String countryName, String countryCode) {
+		return countryName+"(+"+countryCode+")";
+	}
+	
+	private void initData() {
+		mCurrentId = Constants.kDefaultCountryID;
+		mCurrentCountryName = this.getResources().getString(R.string.default_country_name);
+		
+		mMobileCode.setText(getCountryDescString(mCurrentCountryName, mCurrentId));
+	}
+	
+	private void initViews()
+	{
+		mBackBtn = (ImageView)findViewById(R.id.return_btn_id);
+		mForgetPassword = (TextView)findViewById(R.id.forget_password_id);
+		mRegister = (TextView)findViewById(R.id.want_register_id);
+		mLoginBtn = (TextView)findViewById(R.id.login_button_id);
+		mCountryCode = (RelativeLayout)findViewById(R.id.country_layout_id);
+		mMobileCode = (TextView)findViewById(R.id.country_editext_id);
+	}
+	
+	private void initListeners()
+	{
+		mBackBtn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				returnCancelAction();
+			}
+		});
+		
+		mForgetPassword.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				gotoRecoveryActivity();
+			}
+		});
+		
+		mRegister.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				gotoRegisterActivity();
+			}
+		});
+		
+		mLoginBtn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				loginAppServer();
+			}
+		});
+		
+		mCountryCode.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				choiceCode();
+			}
+		});
+	}
+	
+	private void choiceCode()
+	{
+		CountryPage countryPage = new CountryPage();
+		countryPage.setCountryId(mCurrentId);
+		countryPage.setCountryRuls(mCountryRules);
+//		countryPage.setCallback(new Callback() {
+//			@Override
+//			public void dataBackListener(String[] country) {
+//				mCurrentCountryName = country[0];
+//				String currentId = country[2];
+//				String[] countrys = SMSSDK.getCountry(currentId);
+//				if (country != null) {
+//					mCurrentId = countrys[1];
+//				}
+//
+//				mMobileCode.setText(getCountryDescString(mCurrentCountryName, mCurrentId));
+//			}
+//		});
+		countryPage.showForResult(this, null, null);
+	}
+	
+	
+	private void returnCancelAction() {
+		Intent intent = this.getIntent();
+		intent.putExtra("actionType", LoginActivity.kActionIgnore);
+		this.setResult(RESULT_OK, intent);
+		finish();
+	}
+	
+	private void returnAutoLoginAction() {
+		Intent intent = this.getIntent();
+		intent.putExtra("actionType", LoginActivity.kActionAutoLogin);
+		this.setResult(RESULT_OK, intent);
+		finish();
+	}
+	
+	private void gotoRegisterActivity() {
+//		Intent intent = this.getIntent();
+//		intent.putExtra("actionType", LoginActivity.kActionGotoRegister);
+//		this.setResult(RESULT_OK, intent);
+//		finish();
+		registerAction(Constants.kRegisterTypeRegister);
+	}
+	
+	private void gotoRecoveryActivity() {
+//		Intent intent = new Intent(this, RecoveryActivity.class);
+//		this.startActivity(intent);
+		registerAction(Constants.kRegisterTypeResetPassword);
+	}
+	
+	private void registerAction(int type) {
+		mCurrentVerifyType = type;
+		RegisterPage registerPage = new RegisterPage();
+		registerPage.setCheckUserExisCallback(new CheckUserExisCallback() {
+			
+			@Override
+			public void dataBackListener(Runnable runnable, String openid) {
+				Utils.getInstance().checkUserExist(CCVideoOtherLoginActivity.this, runnable, openid, false);
+			}
+		});
+		registerPage.setRegisterCallback(new EventHandler() {
+			public void afterEvent(int event, int result, Object data) {
+				if(result == SMSSDK.RESULT_COMPLETE) {
+					@SuppressWarnings("unchecked")
+					HashMap<String, Object> phoneMap = (HashMap<String, Object>) data;
+					mCurrentCountryName = (String) phoneMap.get("country");
+					mCurrentMobileNumber = (String) phoneMap.get("phone");
+					mCurrentId = (String) phoneMap.get("currentCode");
+					
+					SMSSDK.submitUserInfo(null, null, null, mCurrentCountryName, mCurrentMobileNumber);
+					
+					Intent intent = new Intent(CCVideoOtherLoginActivity.this, CCVideoVerifiedActivity.class);
+					Bundle bundle = new Bundle();
+					bundle.putInt("verifiedType", mCurrentVerifyType);
+					bundle.putString("phoneNumber", mCurrentCountryName+"_"+mCurrentMobileNumber);
+					bundle.putString("countrycode", mCurrentId);
+					intent.putExtras(bundle);
+					
+					startActivity(intent);
+					if (mCurrentVerifyType == Constants.kRegisterTypeRegister) {
+						finish();
+					}
+				}
+			}
+		});
+		registerPage.show(this);
+	}
+	
+	private void loginAppServer() {
+		mRequestFrom = Constants.kLoginTypeOupai;
+		
+		if(mCurrentId == null) {
+			mCurrentId = Constants.kDefaultCountryID;
+		}
+		
+		//this.loginUserName = (String) ((EditText)findViewById(R.id.user_name_edittext_id)).getText().toString().trim();
+		mCurrentMobileNumber = (String)((EditText)findViewById(R.id.mobile_number_id)).getText().toString().trim();
+		this.loginUserPassword = (String) ((EditText)findViewById(R.id.password_edittext_id)).getText().toString().trim();
+		this.isLoginAuto = true;//((CheckBox)findViewById(R.id.login_auto_id)).isChecked();
+		this.isStorePassword = true;//((CheckBox)findViewById(R.id.login_remember_password_id)).isChecked();
+		
+		loginUserName = mCurrentId + "_" + mCurrentMobileNumber;
+		
+		if (loginUserName == null || 
+				loginUserPassword == null || 
+				loginUserPassword.length() < 4 || 
+				loginUserPassword.length() > 16) {
+			Toast.makeText(this, R.string.error_login_input_str, Toast.LENGTH_SHORT).show();
+			return;
+		}
+		
+		registerUser("oupai", null, loginUserName, loginUserName, null, loginUserPassword);
+	}
+	
+	private void registerUser(String from, String token, String userUname, String userDName, String userIcon, String passwd) {
+		mToken = token;
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kRegisterUserAPI);
+		if(from==null || from.equalsIgnoreCase("oupai") || from.equalsIgnoreCase("")) {
+			stb.append("phone="+URLEncoder.encode(userUname));
+			try {
+				stb.append("&paswd="+Utils.getInstance().getMD5(passwd));
+			} catch(NoSuchAlgorithmException e) {
+				e.printStackTrace();
+			}
+		}
+		else {
+			stb.append("authtype="+from+"&token="+token);
+			stb.append("&dname="+URLEncoder.encode(userDName));
+			stb.append("&logourl="+URLEncoder.encode(userIcon));
+		}
+
+		stb.append("&push_id=" + Utils.getInstance().getPushID());
+		stb.append("&channel_id=" + Utils.getInstance().getChannelID());
+		stb.append("&app_id=" + Utils.getInstance().getAppID());
+		stb.append("&dev_token=" + com.oupai.misc.Utils.getDeviceId(this));
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_REGISTER_USER);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(this, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(mProgressDialog);
+					return;
+				}
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_REGISTER_USER || netData==null)
+					return;
+				
+				if(mProgressDialog != null)
+					mProgressDialog.dismiss();
+				
+				mEntity = (UserRegisterEntity)netData;
+				loginUserName = mEntity.mUname;
+				loginUserDName = mEntity.mDname;
+				loginUserPasswordMD5 = mEntity.mPassword;
+				
+				if (mEntity.mRetVal == null) {
+					Toast.makeText(CCVideoOtherLoginActivity.this, R.string.network_issue_toast, Toast.LENGTH_SHORT).show();
+					return;
+				}
+				
+				if(mEntity.mRetVal.equalsIgnoreCase("ok")) {
+					Toast.makeText(CCVideoOtherLoginActivity.this, R.string.login_succ_text, Toast.LENGTH_LONG).show();
+					loginSuccAction();
+				}
+				else {
+					Toast.makeText(CCVideoOtherLoginActivity.this, mEntity.mRetErr, Toast.LENGTH_LONG).show();
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+	}
+	
+	private void loginSuccAction() {
+//		boolean bAppSessionInit = initAppSession();
+//		
+//		if(bAppSessionInit==true) {
+//			try {
+//				saveUserInfo();
+//				returnAutoLoginAction();
+//			} catch (Exception e) {
+//				e.printStackTrace();
+//			}
+//		}
+		
+		try {
+			saveUserInfo();
+			Utils.getInstance().setIsLoggedIn(true);
+			returnAutoLoginAction();
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private boolean initAppSession() {
+		AppSession.appSessionDestroy();
+		int rval = AppSession.initAppSession(getResources().getString(R.string.app_server_host),
+				Integer.parseInt(getResources().getString(R.string.app_server_port)), loginUserName);
+		
+		if (rval != AppSession.APPGATE_EOK) {
+			Toast.makeText(this, R.string.error_net_str, Toast.LENGTH_SHORT).show();
+			return false;
+		}
+		
+		AppSysTool.LogDebug("Login "+getResources().getString(R.string.app_server_host)+":"+getResources().getString(R.string.app_server_port));
+		rval = AppSession.userLogin(loginUserName, loginUserPasswordMD5);
+
+		if (rval != AppSession.APPGATE_EOK) {
+			return false;
+		}
+		
+		return true;
+	}
+	
+	private void saveUserInfo() {
+		SharedPreferences sp = getSharedPreferences(AppSysEnv.APPSYS_LOCAL_DBFILE, Context.MODE_WORLD_WRITEABLE);
+		sp.edit().putInt(AppSysEnv.APPSYS_LOGIN_TYPE, mRequestFrom).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_ACCOUNT_KEYSTR, mEntity.mUname).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PASSWORD_KEYSTR, loginUserPassword).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PASSWORD_MD5_KEYSTR, loginUserPasswordMD5).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_SESSION_ID, mEntity.mSessionID).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_ICONURL, mEntity.mLogoURL).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_DNAME, loginUserDName).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_STOREPASSWORD_KEYSTR, true).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_AUTOLOGIN_KEYSTR, true).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_EMAIL_KEYSTR, mEntity.mEmail).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_PHONE_KEYSTR, mEntity.mPhone).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_WEIXIN_KEYSTR, mEntity.mWeixin).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_GENDER, mEntity.mGender).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_TOKEN, mToken).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_INVITE_URL, mEntity.mInviteURL).commit();
+		sp.edit().putBoolean(AppSysEnv.APPSYS_IS_LOGGED_IN, true).commit();
+		sp.edit().putInt(AppSysEnv.APPSYS_VIDEO_QUALITY_USER_PREFERENCE, 2).commit();
+		sp.edit().putString(AppSysEnv.APPSYS_SIGNATURE_KEYSTR, mEntity.mSignature).commit();
+	}
+	
+	
+    public void onResume() {
+        super.onResume();
+        MobclickAgent.onPageStart("OtherLoginActivity"); //ͳ��ҳ��
+        MobclickAgent.onResume(this);          //ͳ��ʱ��
+    }
+    public void onPause() {
+        super.onPause();
+        MobclickAgent.onPageEnd("OtherLoginActivity"); // ��֤ onPageEnd ��onPause ֮ǰ����,��Ϊ onPause �лᱣ����Ϣ 
+        MobclickAgent.onPause(this);
+    }
+}

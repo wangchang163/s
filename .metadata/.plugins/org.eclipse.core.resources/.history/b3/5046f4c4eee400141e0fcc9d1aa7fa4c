@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.ccvideo"
+    android:versionCode="12"
+    android:versionName="1.3.0.5" >
+
+    <uses-sdk
+        android:minSdkVersion="9"
+        android:targetSdkVersion="17" />
+    
+    
+    <uses-permission android:name="android.permission.CAMERA"/>  
+    <uses-permission android:name="android.permission.RECORD_VIDEO"/>  
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>  
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+	<uses-permission android:name="android.permission.INTERNET"/>
+	<uses-permission android:name="android.permission.WAKE_LOCK" />
+	<uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>
+	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+	<uses-permission android:name="android.permission.BROADCAST_PACKAGE_ADDED" />
+	<uses-permission android:name="android.permission.BROADCAST_PACKAGE_CHANGED" />
+	<uses-permission android:name="android.permission.BROADCAST_PACKAGE_INSTALL" />
+	<uses-permission android:name="android.permission.BROADCAST_PACKAGE_REPLACED" />
+	<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+	<uses-permission android:name="android.permission.READ_CONTACTS"/>
+	<uses-permission android:name="android.permission.SEND_SMS"/>
+	
+	<uses-feature android:name="android.hardware.camera" />
+	<uses-feature android:name="android.hardware.camera.autofocus" />  
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/> 
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+	<uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION"/>
+	<uses-permission android:name="android.permission.READ_PHONE_STATE" />
+	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+	<uses-permission android:name="android.permission.RECEIVE_SMS" />
+	<uses-permission android:name="android.permission.GET_TASKS" />
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+	<uses-permission android:name="android.permission.WRITE_SETTINGS" />
+	<uses-permission android:name="android.permission.VIBRATE" />
+	<uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+	
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/app_logo"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme"
+        android:name="com.baidu.frontia.FrontiaApplication" >
+        
+	    <meta-data android:value="54429e22fd98c50c8a00ed2d" android:name="UMENG_APPKEY"></meta-data>
+		<meta-data android:value="Official" android:name="UMENG_CHANNEL"/>
+        
+        <activity
+            android:name="com.oupai.activity.SplashActivity"
+            android:screenOrientation="nosensor"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:label="@string/app_name" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+		<activity 
+		    android:name="com.oupai.activity.LoginActivity"
+		    android:screenOrientation="nosensor">
+		</activity>
+        <activity android:name="com.oupai.activity.RegisterActivity" android:screenOrientation="nosensor"></activity>
+		<activity android:name="com.oupai.activity.RecoveryActivity" android:screenOrientation="nosensor"></activity>
+		<activity android:name="com.oupai.activity.UserPasswordActivity" android:screenOrientation="nosensor"></activity>
+		
+        <activity android:name="com.oupai.activity.CCVideoGuideActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait">
+        </activity>
+		
+		<activity android:name="com.oupai.activity.CCVideoOtherLoginActivity"
+			android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait">
+        </activity>
+        
+		<activity android:name="com.oupai.activity.CCVideoAboutOupaiActivity"
+			android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait">
+        </activity>
+        
+       	<activity android:name="com.oupai.activity.CCVideoCopyrightActivity"
+			android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait">
+        </activity>
+
+		<activity android:name="com.oupai.activity.CCVideoFeedbackActivity"
+			android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait">
+        </activity>
+        <activity android:name="com.ccvideo.wxapi.WXEntryActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
+		<activity
+        	android:name="com.tencent.tauth.AuthActivity"
+        	android:noHistory="true"
+        	android:theme="@android:style/Theme.NoTitleBar"
+        	android:launchMode="singleTask" >
+	    	<intent-filter>
+	            <action android:name="android.intent.action.VIEW" />
+				<category android:name="android.intent.category.DEFAULT" />
+	            <category android:name="android.intent.category.BROWSABLE" />
+	            <data android:scheme="tencent1103084220" />
+	    	 </intent-filter>
+		 </activity>
+		 
+		<activity
+            android:name="com.oupai.activity.OwnPageActivity"
+			android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait" >
+        </activity>
+        
+		<activity
+            android:name="com.oupai.activity.OtherPageActivity"
+			android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait" >
+        </activity>
+        
+        <activity
+            android:name="com.oupai.activity.CCVideoPersonalInfoActivity"
+			android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait" >
+
+        </activity>
+        
+
+		<activity
+            android:name="com.oupai.activity.OupaiLivingActivity"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait"></activity>   
+		<activity
+            android:name="com.oupai.activity.CCVideoSettingActivity"
+			android:theme="@android:style/Theme.NoTitleBar"
+            android:screenOrientation="portrait"></activity>   
+		<activity
+            android:name="com.tencent.connect.common.AssistActivity"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:screenOrientation="portrait" />
+		
+		<activity
+		    android:name="com.oupai.activity.CCVideoVerifiedActivity"
+		    android:theme="@android:style/Theme.NoTitleBar"
+		    android:screenOrientation="portrait"></activity>
+		
+		<activity
+		    android:name="com.oupai.activity.CCVideoFindFriendsActivity"
+		    android:theme="@android:style/Theme.NoTitleBar"
+		    android:screenOrientation="portrait"></activity>
+		
+		<activity
+		    android:name="com.oupai.activity.CCVideoSquareActivity"
+		    android:theme="@android:style/Theme.NoTitleBar"
+		    android:launchMode="singleTop"
+		    android:screenOrientation="portrait"></activity>
+		<activity
+		    android:name="com.oupai.activity.CCVideoAttentionPersonsActivity"
+		    android:theme="@android:style/Theme.NoTitleBar"
+		    android:launchMode="singleTop"
+		    android:screenOrientation="portrait"></activity>
+		
+		<activity
+		    android:name="com.oupai.activity.CCVideoUserListActivity"
+		    android:theme="@android:style/Theme.NoTitleBar"
+		    android:screenOrientation="portrait"></activity>
+		
+		<activity android:name="com.cloudfocus.opplayer.OPPlayerActivity"
+		    android:theme="@android:style/Theme.NoTitleBar"
+		    android:screenOrientation="nosensor"
+		    android:windowSoftInputMode="adjustResize" 
+			android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>  
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" /> 
+                <data android:scheme="oupai" android:host="oupai.cloudfocus.cn" android:pathPrefix="/media"/> 
+                <data android:scheme="opplayer" android:host="oupai.app" android:pathPrefix="/playdev"/> 
+                
+                </intent-filter>
+        </activity>
+        
+        <activity
+            android:name="io.vov.vitamio.activity.InitActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+        
+		<service
+            android:name="io.vov.vitamio.VitamioService"
+            android:exported="false" >
+            <intent-filter>
+                <action android:name="io.vov.vitamio.IVitamioService" />
+            </intent-filter>
+        </service>
+        
+		<activity
+            android:name="cn.smssdk.SMSSDKUIShell"
+            android:configChanges="keyboardHidden|orientation|screenSize"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+		
+        <!-- 必须注册在微博授权，分享微博时候用到 -->
+        <activity
+            android:name="com.sina.weibo.sdk.component.WeiboSdkBrowser"
+            android:configChanges="keyboardHidden|orientation"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" >
+        </activity>
+		
+        <!-- push富媒体，不使用富媒体推送不需要 -->
+        <activity
+            android:name="com.baidu.android.pushservice.richmedia.MediaViewActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="MediaViewActivity" >
+        </activity>
+        <activity
+            android:name="com.baidu.android.pushservice.richmedia.MediaListActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="MediaListActivity"
+            android:launchMode="singleTask" >
+        </activity>
+        <!-- push富媒体结束 -->
+        <!-- push应用定义消息receiver声明 -->
+        <receiver android:name="com.oupai.bdpush.BdPushMessageReceiver">
+            <intent-filter>
+                <!-- 接收push消息 -->
+                <action android:name="com.baidu.android.pushservice.action.MESSAGE" />
+                <!-- 接收bind,unbind,fetch,delete等反馈消息 -->
+                <action android:name="com.baidu.android.pushservice.action.RECEIVE" />
+                <action android:name="com.baidu.android.pushservice.action.notification.CLICK" />
+            </intent-filter>
+        </receiver>
+        <!-- push必须的receviver和service声明 -->
+        <receiver android:name="com.baidu.android.pushservice.PushServiceReceiver"
+            android:process=":bdservice_v1">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
+                <action android:name="com.baidu.android.pushservice.action.notification.SHOW" />
+                <action android:name="com.baidu.android.pushservice.action.media.CLICK" />
+		<!-- 以下四项为可选的action声明，可大大提高service存活率和消息到达速度 -->
+		<action android:name="android.intent.action.MEDIA_MOUNTED" />
+		<action android:name="android.intent.action.USER_PRESENT" />
+		<action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+		<action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name="com.baidu.android.pushservice.RegistrationReceiver"
+            android:process=":bdservice_v1">
+            <intent-filter>
+                <action android:name="com.baidu.android.pushservice.action.METHOD" />
+                <action android:name="com.baidu.android.pushservice.action.BIND_SYNC" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_REMOVED"/>
+                <data android:scheme="package" />
+            </intent-filter>                   
+        </receiver>
+        <service
+            android:name="com.baidu.android.pushservice.PushService"
+            android:exported="true"
+            android:process=":bdservice_v1" >
+            <intent-filter >
+                <action android:name="com.baidu.android.pushservice.action.PUSH_SERVICE"/>
+            </intent-filter>
+        </service>
+        <!-- 4.4版本新增的CommandService声明，提升小米和魅族手机上的实际推送到达率 -->
+        <service
+            android:name="com.baidu.android.pushservice.CommandService"
+            android:exported="true" />
+        <!-- push结束 -->
+    </application>
+
+</manifest>

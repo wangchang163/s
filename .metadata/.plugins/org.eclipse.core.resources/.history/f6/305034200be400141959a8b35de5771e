@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/simple_title_id"
+    android:layout_width="fill_parent"
+    android:layout_height="50dip" >
+
+    <TextView
+        android:id="@+id/simple_title"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:paddingBottom="2dip"
+        android:paddingTop="2dip"
+        android:layout_marginLeft="40dp"
+        android:layout_marginRight="40dp"
+        android:singleLine="true"
+        android:textColor="@color/color_white"
+        android:text="个人中心"
+        android:textSize="21sp" />
+<!--  android:background="#00b0dc" -->
+    <ImageView
+        android:id="@+id/simple_back"
+        android:background="@drawable/nav_icon_return"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentLeft="true"
+        android:layout_centerVertical="true"
+        android:gravity="center"/>
+
+    <TextView
+        android:id="@+id/ex"
+        android:layout_width="22dip"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_centerVertical="true"
+        />
+    
+    <ImageView
+        android:id="@+id/function_btn_id"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toLeftOf="@id/ex"
+        android:gravity="center"
+        android:layout_centerVertical="true"
+        android:visibility="visible"
+        android:src="@drawable/zhibo"
+        />
+</RelativeLayout>

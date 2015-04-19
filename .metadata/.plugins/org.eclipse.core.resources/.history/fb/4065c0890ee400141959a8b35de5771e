@@ -1,0 +1,591 @@
+package com.oupai.adapter;
+
+import java.net.URLEncoder;
+import java.util.List;
+
+import com.ccvideo.R;
+import com.oupai.misc.Constants;
+import com.oupai.misc.Utils;
+import com.oupai.net.HttpActionID;
+import com.oupai.net.HttpParams;
+import com.oupai.net.HttpRequest;
+import com.oupai.net.HttpTask;
+import com.oupai.net.HttpTask.HttpCallbackInterface;
+import com.oupai.view.FitImageView;
+import com.cloudfocus.opplayer.OPPlayerActivity;
+import com.nostra13.universalimageloader.core.DisplayImageOptions;
+import com.oupai.activity.OwnPageActivity;
+import com.oupai.activity.OupaiLivingActivity;
+import com.oupai.dialog.LuboShareDialogOwn;
+import com.oupai.entity.CCVideoShareVideoEntity;
+import com.oupai.entity.CCVideoUpdateVideoPrivacyEntity;
+import com.oupai.entity.CCVideoUpdateVideoTitleEntity;
+import com.oupai.entity.CCVideoVideoActionEntity;
+import com.oupai.entity.LbItem;
+import com.oupai.fragment.ActionSheet;
+import com.oupai.fragment.ActionSheet.ActionSheetListener;
+
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.support.v4.app.FragmentActivity;
+import android.text.InputType;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+
+public class LBAdapterOwn extends BaseAdapter implements ActionSheetListener {
+
+	private List<com.oupai.entity.LbItem> mLbItem;
+    private LayoutInflater inflater;
+    private ListView mListview;
+    private OwnPageActivity mContext;
+    
+    private boolean isCurrentUser = true;
+    
+    public int mActionVideoPos = -1;
+    public String mActionVideoID = null;
+    private String mActionVideoShareURL = null;
+    private CCVideoVideoActionEntity mEntity = null;
+    private CCVideoShareVideoEntity mShareEntity = null;
+    private CCVideoUpdateVideoTitleEntity mUpdateTitleEntity = null;
+    private CCVideoUpdateVideoPrivacyEntity mUpdateVideoPrivacyEntity = null;
+    
+    private ProgressDialog mHud;
+    private LuboShareDialogOwn mShareDialog = null;
+    private String mUpdatedVideoTitle = null;
+    private int mNewVideoPermission = -1;
+        
+    private OnClickListener mDeleteBtnClickListener = new OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            final int position = mListview.getPositionForView(v)-1;
+            if(position>=0 && position<mLbItem.size()) {
+            	deleteVideo(position);
+            }
+        }
+    };
+    
+    private OnClickListener mShareBtnClickListener = new OnClickListener() {
+    	@Override
+    	public void onClick(View v) {
+    		final int position = mListview.getPositionForView(v)-1;
+    		if(position>=0 && position<mLbItem.size()) {
+    			shareVideo(position);
+    		}
+    	}
+    };
+    
+    private OnClickListener mMoreBtnClickListener = new OnClickListener() {
+		
+		@Override
+		public void onClick(View arg0) {
+
+    		final int position = mListview.getPositionForView(arg0)-1;
+    		if(position>=0 && position<mLbItem.size()) {
+    			moreVideoAction(position);
+    		}
+		}
+	};
+    
+    private OnClickListener mPlayBtnClickListener = new OnClickListener() {
+    	@Override
+    	public void onClick(View v) {
+    		final int position = mListview.getPositionForView(v)-1;
+    		if(position>=0 && position<mLbItem.size()) {
+    			playVideo(position);
+    		}
+    	}
+    };
+    
+    private void moreVideoAction(int position) {
+    	mActionVideoID = mLbItem.get(position).getVideoID();
+    	mActionVideoPos = position;
+    	
+    	OwnPageActivity obj = (OwnPageActivity)mContext;
+    	if(isCurrentUser) {
+			ActionSheet.createBuilder(obj, obj.getSupportFragmentManager())
+			.setCancelButtonTitle(R.string.cancel_str)
+			.setOtherButtonTitles(
+					mContext.getResources().getString(R.string.personal_page_update_title), 
+					mContext.getResources().getString(R.string.personal_page_update_privacy),
+					mContext.getResources().getString(R.string.personal_page_update_thumb),
+					mContext.getResources().getString(R.string.personal_page_share), 
+					mContext.getResources().getString(R.string.personal_page_delete))
+			.setTag("VideoActionTag")
+			.setCancelableOnTouchOutside(true).setListener(obj).show();
+    	}
+    	else {
+			ActionSheet.createBuilder(obj, obj.getSupportFragmentManager())
+			.setCancelButtonTitle(R.string.cancel_str)
+			.setOtherButtonTitles(mContext.getResources().getString(R.string.personal_page_share))
+			.setTag("VideoActionTag")
+			.setCancelableOnTouchOutside(true).setListener(obj).show();
+    	}
+    }
+    
+    
+    private void playVideo(int position) {
+    	LbItem item = mLbItem.get(position);
+    	mActionVideoID = mLbItem.get(position).getVideoID();
+    	mActionVideoPos = position;
+    	Intent intent = new Intent(mContext, OPPlayerActivity.class);
+    	Bundle bundle = new Bundle();
+    	bundle.putString("linkid", mActionVideoID);
+    	bundle.putString("uname", item.getUname());
+    	bundle.putInt("logid", item.getLogid());
+    	bundle.putString("oname", item.getOname());
+    	bundle.putString("user_dname", item.getDisplayName());
+    	intent.putExtras(bundle);
+    	mContext.startActivity(intent);
+    }
+    
+    public void shareVideo(int position) {
+    	Utils.getInstance().mWXActionType = Constants.kWeixinShareActionType;
+    	mActionVideoID = mLbItem.get(position).getVideoID();
+    	mActionVideoPos = position;
+    	
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kDevicePublicPastLivingAPI);
+		stb.append("linkid=" + mActionVideoID);
+		stb.append("&sessionid="+Utils.getInstance().getSessionID(mContext));
+		stb.append("&public=1");
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_VIDEO_SHARE_ACTION);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(mContext, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_VIDEO_SHARE_ACTION || netData==null)
+					return;
+				
+				mShareEntity = (CCVideoShareVideoEntity)netData;
+				if(mShareEntity!=null && mShareEntity.mRetVal.equals("ok")) {
+					mActionVideoShareURL = mShareEntity.mPublicURL;
+					updateUIShowShareVideoDialog();
+				}
+				else {
+					Toast.makeText(mContext, R.string.get_share_address_failed, Toast.LENGTH_LONG);
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+    }
+    
+    private void updateUIShowShareVideoDialog() {
+    	LbItem item = mLbItem.get(mActionVideoPos);
+    	Utils.getInstance().mShareURL = mActionVideoShareURL;
+		Utils.getInstance().mThumbPath = null;
+		Utils.getInstance().mShareFrom = Constants.kFromPersonal;
+		Utils.getInstance().mShareTitle = item.getDescer();
+		if(Utils.getInstance().getIsLoggedIn()) {
+			Utils.getInstance().mShareDesc = 
+					mContext.getResources().getString(R.string.found_interesting_str)+
+					Utils.getInstance().getUserDname(mContext)+
+					mContext.getResources().getString(R.string.comma)+
+					item.getDisplayName()+
+					mContext.getResources().getString(R.string.welcome_to_watch_other_str);
+		}
+		else {
+			Utils.getInstance().mShareDesc = mContext.getResources().getString(R.string.welcome_to_watch_str);
+		}
+		Utils.getInstance().mShareIconURL = item.getThumbnail();
+		Utils.getInstance().mShareActivity = mContext;
+		
+		mShareDialog = new LuboShareDialogOwn(mContext, R.style.CustomDialog);
+		mShareDialog.setLiveFragment(mContext);
+
+		mShareDialog.setTitle(R.string.shareto_str);
+		mShareDialog.show();
+    }
+    
+    private void updateVideoTitleUI() {
+    	LbItem item = mLbItem.get(mActionVideoPos);
+    	item.setDescer(mUpdatedVideoTitle);
+    	this.notifyDataSetChanged();
+    }
+    
+    public void updateVideoTitle(String newTitle) {
+		mUpdatedVideoTitle = newTitle;
+		
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kDeviceLivingTitleUpdateAPI);
+		stb.append("linkid=" + mActionVideoID);
+		stb.append("&title="+URLEncoder.encode(newTitle));
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_REQUEST_UPDATE_VIDEO_TITLE_ACTION);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(mContext, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				
+				if(actionId!=HttpActionID.ACTION_ID_REQUEST_UPDATE_VIDEO_TITLE_ACTION || netData==null)
+					return;
+				
+				mUpdateTitleEntity = (CCVideoUpdateVideoTitleEntity)netData;
+				if(mUpdateTitleEntity!=null && mUpdateTitleEntity.mRetVal.equals("ok")) {
+					LBAdapterOwn.this.updateVideoTitleUI();
+				}
+				else {
+					Toast.makeText(mContext, R.string.modify_video_title_failed, Toast.LENGTH_LONG);
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+    }
+    
+    public void uploadVideoThumbPic(String url) {
+    	LbItem item = mLbItem.get(mActionVideoPos);
+    	item.setThumbnail(url);
+    }
+    
+    public void editVideoTitle(int position) {
+    	LbItem item = mLbItem.get(position);
+    	AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
+    	builder.setTitle(R.string.edit_title_str);
+
+    	// Set up the input
+    	final EditText input = new EditText(mContext);
+    	input.setText(item.getDescer());
+    	// Specify the type of input expected; this, for example, sets the input as a password, and will mask the text
+    	input.setInputType(InputType.TYPE_CLASS_TEXT);
+    	builder.setView(input);
+
+    	// Set up the buttons
+    	builder.setPositiveButton(R.string.confirm_str, new DialogInterface.OnClickListener() { 
+    	    @Override
+    	    public void onClick(DialogInterface dialog, int which) {
+    	        updateVideoTitle(input.getText().toString());
+    	    }
+    	});
+    	builder.setNegativeButton(R.string.cancel_str, new DialogInterface.OnClickListener() {
+    	    @Override
+    	    public void onClick(DialogInterface dialog, int which) {
+    	        dialog.cancel();
+    	    }
+    	});
+
+    	builder.show();
+    }
+
+    public void updateVideoThumb(int position) {
+    	mActionVideoID = mLbItem.get(position).getVideoID();
+    	mActionVideoPos = position;
+    	
+    	OwnPageActivity obj = (OwnPageActivity)mContext;
+    	ActionSheet.createBuilder(obj, obj.getSupportFragmentManager())
+    	.setCancelButtonTitle(R.string.cancel_str)
+    	.setOtherButtonTitles(
+    			mContext.getResources().getString(R.string.photo_from_camera),
+    			mContext.getResources().getString(R.string.photo_from_album))
+    	.setTag("UpdateThumb")
+    	.setCancelableOnTouchOutside(true).setListener(obj).show();
+    }
+    
+    public void changePrivacy(int position) {
+    	mActionVideoID = mLbItem.get(position).getVideoID();
+    	mActionVideoPos = position;
+    	
+    	OwnPageActivity obj = (OwnPageActivity)mContext;
+		ActionSheet.createBuilder(obj, obj.getSupportFragmentManager())
+		.setCancelButtonTitle(R.string.cancel_str)
+		.setOtherButtonTitles(
+				mContext.getResources().getString(R.string.privacy_open), 
+				mContext.getResources().getString(R.string.privacy_share_open), 
+				mContext.getResources().getString(R.string.privacy_private))
+		.setTag("ChangePrivacy")
+		.setCancelableOnTouchOutside(true).setListener(obj).show();
+    }
+    
+    public void performChangePrivacy(int privacy) {
+		StringBuilder stb = new StringBuilder("");
+		stb.append(Constants.kServiceURL);
+		stb.append(Constants.kUpdateVideoPrivacyAPI);
+		stb.append("&sessionid=" + Utils.getInstance().getSessionID(mContext));
+		stb.append("&videoid=" + mActionVideoID);
+		stb.append("&permission=" + privacy);
+		
+		if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+			Utils.getInstance().mHttpTask.cancel(true);
+			Utils.getInstance().mHttpTask = null;
+		}
+		
+		HttpParams params = new HttpParams();
+		params.setActionId(HttpActionID.ACTION_ID_UPDATE_VIDEO_PRIVACY);
+		params.setActionUrl(stb.toString());
+		Utils.getInstance().mHttpTask = new HttpTask(mContext, new HttpCallbackInterface() {
+			
+			@Override
+			public void callBack(int resultCode, int actionId, String actionParam,
+					Object netData) {
+				if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+					Utils.getInstance().networkFailed(null);
+					return;
+				}
+				
+				if(actionId!=HttpActionID.ACTION_ID_UPDATE_VIDEO_PRIVACY || netData==null)
+					return;
+				
+				mUpdateVideoPrivacyEntity = (CCVideoUpdateVideoPrivacyEntity)netData;
+				if(mUpdateVideoPrivacyEntity!=null && mUpdateVideoPrivacyEntity.mRetVal.equals("ok")) {
+					Toast.makeText(mContext, R.string.update_video_privacy_succ, Toast.LENGTH_LONG).show();
+				}
+				else {
+					Toast.makeText(mContext, R.string.update_video_privacy_fail, Toast.LENGTH_LONG).show();
+				}
+			}
+		});
+		Utils.getInstance().mHttpTask.execute(params);
+    }
+    
+    public void deleteVideo(int position) {
+    	mActionVideoID = mLbItem.get(position).getVideoID();
+    	mActionVideoPos = position;
+    	
+		AlertDialog.Builder alert = new AlertDialog.Builder(mContext);
+		alert.setTitle(mContext.getResources().getString(R.string.pls_choose));
+		alert.setMessage(mContext.getResources().getString(R.string.whether_to_delete));
+		
+		alert.setPositiveButton(mContext.getResources()
+				.getString(R.string.confirm_str),
+				new DialogInterface.OnClickListener() {
+
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						StringBuilder stb = new StringBuilder("");
+						stb.append(Constants.kServiceURL);
+						stb.append(Constants.kDeviceRemovePastLivingAPI);
+						stb.append("linkid=" + mActionVideoID);
+						stb.append("&sessionid="+Utils.getInstance().getSessionID(mContext));
+						
+						if(Utils.getInstance().mHttpTask != null && Utils.getInstance().mHttpTask.getStatus()==AsyncTask.Status.RUNNING) {
+							Utils.getInstance().mHttpTask.cancel(true);
+							Utils.getInstance().mHttpTask = null;
+						}
+						
+						HttpParams params = new HttpParams();
+						params.setActionId(HttpActionID.ACTION_ID_REQUEST_VIDEO_ACTION);
+						params.setActionUrl(stb.toString());
+						Utils.getInstance().mHttpTask = new HttpTask(mContext, new HttpCallbackInterface() {
+							
+							@Override
+							public void callBack(int resultCode, int actionId, String actionParam,
+									Object netData) {
+								if(resultCode != HttpRequest.NET_REQUEST_CODE_OK) {
+									Utils.getInstance().networkFailed(null);
+									return;
+								}
+								if(actionId!=HttpActionID.ACTION_ID_REQUEST_VIDEO_ACTION || netData==null)
+									return;
+								
+								mEntity = (CCVideoVideoActionEntity)netData;
+								if(mEntity!=null && !mEntity.mRetVal.equals("")) {
+									mLbItem.remove(mActionVideoPos);
+									LBAdapterOwn.this.notifyDataSetChanged();
+									Toast.makeText(mContext, R.string.delete_succ, Toast.LENGTH_LONG);
+								}
+								else {
+									Toast.makeText(mContext, R.string.delete_fail, Toast.LENGTH_LONG);
+								}
+							}
+						});
+						Utils.getInstance().mHttpTask.execute(params);
+					}
+				});	
+		alert.setNegativeButton(mContext.getResources().getString(R.string.cancel_str), 
+				new DialogInterface.OnClickListener() {
+					
+					@Override
+					public void onClick(DialogInterface dialog, int which) {
+						dialog.dismiss();
+					}
+				});
+		alert.show();
+    }
+
+    public LBAdapterOwn(Context context, boolean iscurrentuser) {
+        inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+    
+        isCurrentUser = iscurrentuser;
+    }
+    
+
+	public void setListView(ListView listview, OwnPageActivity context) {
+    	mListview = listview;
+    	mContext = context;
+    }
+    
+	@Override
+	public int getCount() {
+		// TODO Auto-generated method stub
+		return mLbItem.size();
+	}
+
+	@Override
+	public Object getItem(int arg0) {
+		// TODO Auto-generated method stub
+		return mLbItem.get(arg0);
+	}
+
+	@Override
+	public long getItemId(int id) {
+		// TODO Auto-generated method stub
+		return id;
+	}
+
+	@Override
+	public View getView(int position, View convertView, ViewGroup group) {
+		if (position >= mLbItem.size()) return convertView;
+        ViewHolder holder = null;
+        if (convertView == null) {
+            holder = new ViewHolder();
+            convertView = inflater.inflate(R.layout.video_item, null);
+            holder.thumbnail = (FitImageView) convertView.findViewById(R.id.thumbnail);
+            holder.time = (TextView) convertView.findViewById(R.id.time);
+            holder.descr = (TextView) convertView.findViewById(R.id.descr);
+            holder.pl_count = (TextView) convertView.findViewById(R.id.pl_count);
+            holder.ll_count = (TextView) convertView.findViewById(R.id.ll_count);
+            holder.zan_count = (TextView) convertView.findViewById(R.id.zan_count);
+            //holder.zan_icon = (ImageView) convertView.findViewById(R.id.zan_icon);
+//            holder.deleteBtn = (ImageView)convertView.findViewById(R.id.delete);
+//            holder.shareBtn = (ImageView)convertView.findViewById(R.id.share);
+            holder.moreBtn = (ImageView)convertView.findViewById(R.id.more_action_id);
+            holder.playBtn = (ImageView)convertView.findViewById(R.id.play_id);
+            
+            holder.liveVideoIcon = (ImageView)convertView.findViewById(R.id.new_video);
+            holder.city = (TextView) convertView.findViewById(R.id.city);
+            holder.privacy = (TextView)convertView.findViewById(R.id.gongkai_status);
+            
+            convertView.setTag(holder);
+        } else {
+            holder = (ViewHolder) convertView.getTag();
+        }
+
+        LbItem fsitem = mLbItem.get(position);
+
+        String imgURL = fsitem.getThumbnail();
+        if (imgURL != null && !"".equals(imgURL)) 
+        {
+        	Utils.getInstance().imageLoader.displayImage(imgURL, holder.thumbnail);
+        }
+
+        int video_start_live_time = fsitem.getLiveTime();
+        holder.time.setText(Utils.getInstance().getVideoStartTimeDesc(video_start_live_time));
+        
+        //holder.time.setText(fsitem.getTime());
+        holder.descr.setText(fsitem.getDescer());
+        holder.pl_count.setText(fsitem.getPl());
+        holder.ll_count.setText(fsitem.getLl());
+        holder.zan_count.setText(fsitem.getZan());
+        
+        if(fsitem.getIsLive() != 1) {
+        	holder.liveVideoIcon.setVisibility(View.GONE);
+        }
+        
+        if(fsitem.getDistance() < 0) {
+        	holder.city.setText(Utils.getInstance().getDistanceDesc(fsitem.getDistance(), fsitem.getGpsFlag()));
+        }
+        else {
+        	holder.city.setText(fsitem.getCity()+ "  " + Utils.getInstance().getDistanceDesc(fsitem.getDistance(), fsitem.getGpsFlag()));
+        }
+        
+        holder.playBtn.setOnClickListener(mPlayBtnClickListener);
+        holder.moreBtn.setOnClickListener(mMoreBtnClickListener);
+        
+        if(isCurrentUser) {
+	        
+	        switch(fsitem.getPermission()) {
+	        case 0:
+	        	holder.privacy.setText(mContext.getResources().getString(R.string.privacy_open));
+	        	break;
+	        case 1:
+	        	holder.privacy.setText(mContext.getResources().getString(R.string.privacy_share_open));
+	        	break;
+	        case 2:
+	        	holder.privacy.setText(mContext.getResources().getString(R.string.privacy_private));
+	        	break;
+	        default:
+	        	holder.privacy.setText(mContext.getResources().getString(R.string.privacy_open));
+	        	break;
+	        }
+        }
+        else {
+        	holder.privacy.setVisibility(View.GONE);
+        }
+        
+        
+        return convertView;
+    }
+
+    class ViewHolder {
+        private FitImageView thumbnail;
+        private TextView time;
+        private TextView descr;
+        private TextView pl_count;
+        private TextView ll_count;
+        private TextView zan_count;
+        
+        private ImageView playBtn;
+        private ImageView moreBtn;
+        
+        private ImageView liveVideoIcon;
+        private TextView city;
+        private TextView privacy;
+    }
+
+    public void setDatas(List<LbItem> datas) {
+    	mLbItem = datas;
+    }
+
+	@Override
+	public void onDismiss(ActionSheet actionSheet, boolean isCancel) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void onOtherButtonClick(ActionSheet actionSheet, int index) {
+		// TODO Auto-generated method stub
+		
+	}
+	
+}
